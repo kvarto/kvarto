@@ -1,7 +1,6 @@
 package io.kvarto.http
 
 import io.kvarto.http.HttpStatus.*
-import java.lang.IllegalArgumentException
 
 
 enum class HttpStatus(val code: Int) {
@@ -70,7 +69,8 @@ enum class HttpStatus(val code: Int) {
     NETWORK_CONNECT_TIMEOUT_ERROR(599);
 
     companion object {
-        fun fromCode(code: Int): HttpStatus = values().find { it.code == code }
+        fun fromCode(code: Int): HttpStatus =
+            values().find { it.code == code }
                 ?: throw IllegalArgumentException("There is no http status with code $code")
     }
 }

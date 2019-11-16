@@ -19,6 +19,3 @@ suspend fun main() {
     println(response)
 }
 
-private fun createClient(): HttpClient {
-    TODO()
-}

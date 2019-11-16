@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import org.apache.http.client.utils.URIBuilder
 
+//TODO: add open tracing and metrics
 internal class VertxHttpClient(val vertx: Vertx, val options: HttpClientOptions) : HttpClient {
     override suspend fun send(request: HttpRequest): HttpResponse {
         val client = vertx.createHttpClient(options)
@@ -21,14 +22,12 @@ internal class VertxHttpClient(val vertx: Vertx, val options: HttpClientOptions)
             host = request.url.host
             port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
             isSsl = request.url.protocol == "https"
-            request.headers.values.forEach { (name, value) ->
+            request.headers.values().forEach { (name, value) ->
                 addHeader(name, value)
             }
             uri = URIBuilder(request.url.toURI()).apply {
-                request.params.values.forEach { (name, values) ->
-                    values.forEach {
-                        addParameter(name, it)
-                    }
+                for ((name, value) in request.params.values()) {
+                    addParameter(name, value)
                 }
             }.build().toASCIIString()
         }
@@ -41,7 +40,9 @@ internal class VertxHttpClient(val vertx: Vertx, val options: HttpClientOptions)
         val responseChannel = (vertxReq as ReadStream<HttpClientResponse>).toChannel(vertx)
         val vertxResponse = responseChannel.receive()
         val status = HttpStatus.fromCode(vertxResponse.statusCode())
-        val headers = vertxResponse.headers().entries().map { (name, value) -> name to value }.let(::Headers)
+        val headers = StringMultiMapImpl().apply {
+            addAll(vertxResponse.headers().map { (name, value) -> name to value })
+        }
 
         val responseBodyFlow = flow {
             val ch = vertxResponse.toChannel(vertx)
