@@ -26,6 +26,7 @@ dependencies {
     implementation("io.vertx:vertx-web-client:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
+    implementation("org.apache.httpcomponents:httpclient:4.5.10")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
     testImplementation("org.assertj:assertj-core:3.14.0")
