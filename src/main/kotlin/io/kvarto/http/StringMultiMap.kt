@@ -19,6 +19,8 @@ interface StringMultiMap {
 
     companion object {
         val EMPTY: StringMultiMap = StringMultiMapImpl()
+
+        fun of(values: List<Pair<String, String>>) = EMPTY.addAll(values)
     }
 }
 

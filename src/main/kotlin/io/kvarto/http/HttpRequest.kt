@@ -22,3 +22,5 @@ data class HttpRequest(
 //val operationId: String? = null,
 //val successStatuses: Set<HttpStatus> = SUCCESS_STATUSES
 //val retry: RetryConfig = RetryConfig.No_RETRY
+//timeout
+//circuit breaker

@@ -76,8 +76,11 @@ enum class HttpStatus(val code: Int) {
 }
 
 val ALL_STATUSES: Set<HttpStatus> = values().toSet()
+
 val SUCCESS_STATUSES: Set<HttpStatus> = setOf(OK, CREATED, ACCEPTED, NO_CONTENT)
+
 val CLIENT_ERRORS = ALL_STATUSES.filter { it.code / 100 == 4 }.toSet()
+
 val SERVER_ERRORS = ALL_STATUSES.filter { it.code / 100 == 5 }.toSet()
 
 

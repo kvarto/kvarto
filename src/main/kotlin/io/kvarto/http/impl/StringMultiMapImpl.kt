@@ -34,4 +34,20 @@ internal class StringMultiMapImpl : StringMultiMap { //TODO: replace with more e
         }
 
     override fun addAll(params: StringMultiMap): StringMultiMap = addAll(params.values())
+
+    override fun toString(): String = buildString {
+        append('{')
+        val values = values()
+        values.forEachIndexed { i, (name, value) ->
+            append('\"')
+            append(name)
+            append("\": \"")
+            append(value)
+            append('\"')
+            if (i < values.size - 1) {
+                append(", ")
+            }
+        }
+        append('}')
+    }
 }

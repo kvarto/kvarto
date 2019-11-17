@@ -6,12 +6,11 @@ import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
-import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
 import io.vertx.kotlin.coroutines.toChannel
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import org.apache.http.client.utils.URIBuilder
+import kotlin.coroutines.suspendCoroutine
 
 //TODO: add open tracing and metrics
 internal class VertxHttpClient(val vertx: Vertx, val options: HttpClientOptions) : HttpClient {
@@ -32,22 +31,25 @@ internal class VertxHttpClient(val vertx: Vertx, val options: HttpClientOptions)
             }.build().toASCIIString()
         }
         val vertxReq = client.request(method, options)
-        val writeChannel = (vertxReq as WriteStream<Buffer>).toChannel(vertx)
-        request.body.content().collect { elem ->
-            writeChannel.send(Buffer.buffer(elem))
-        }
-        writeChannel.close()
-        val responseChannel = (vertxReq as ReadStream<HttpClientResponse>).toChannel(vertx)
-        val vertxResponse = responseChannel.receive()
-        val status = HttpStatus.fromCode(vertxResponse.statusCode())
-        val headers = StringMultiMapImpl().apply {
-            addAll(vertxResponse.headers().map { (name, value) -> name to value })
-        }
+        val byteArrayReqBodyFlow = request.body.content().map { Buffer.buffer(it) }
+        vertxReq.writeAwait(byteArrayReqBodyFlow)
 
+        val vertxResponse = suspendCoroutine<HttpClientResponse> { cont ->
+            vertxReq.handler {
+                cont.resumeWith(Result.success(it))
+            }
+            vertxReq.exceptionHandler {
+                cont.resumeWith(Result.failure(it))
+            }
+            vertxReq.end()
+        }
+        val status = HttpStatus.fromCode(vertxResponse.statusCode())
+        val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
+
+        val responseBodyChannel = vertxResponse.toChannel(vertx)
         val responseBodyFlow = flow {
-            val ch = vertxResponse.toChannel(vertx)
-            for (e in ch) {
-                emit(e.bytes)
+            for (elem in responseBodyChannel) {
+                emit(elem.bytes)
             }
         }
         return HttpResponse(status, headers, Body(responseBodyFlow))
@@ -59,3 +61,40 @@ private val DEFAULT_OPTIONS = HttpClientOptions()
 
 fun HttpClient.Companion.create(vertx: Vertx, options: HttpClientOptions = DEFAULT_OPTIONS): HttpClient =
     VertxHttpClient(vertx, options)
+
+private suspend fun <T> WriteStream<T>.writeAwait(flow: Flow<T>) {
+    flow.collect { elem ->
+        waitTillWritable()
+        write(elem)
+    }
+}
+
+private suspend fun <T> WriteStream<T>.waitTillWritable() {
+    if (writeQueueFull()) {
+        suspendCoroutine<Unit> { cont ->
+            drainHandler {
+                cont.resumeWith(Result.success(Unit))
+            }
+            exceptionHandler {
+                cont.resumeWith(Result.failure(it))
+            }
+        }
+    }
+}
+
+//private fun <T> ReadStream<T>.toChannel(): ReceiveChannel<T> {
+//    var shouldRun = true
+//    val stream = this
+//    stream.endHandler {
+//        shouldRun = false
+//    }
+//    val ch = Channel<T>()
+//    stream.pause()
+//    stream.fetch(1)
+//    stream.handler { elem ->
+//        if ()
+//    }
+//
+//    return ch
+//}
+//
