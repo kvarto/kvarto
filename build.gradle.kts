@@ -1,11 +1,11 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinVersion = "1.3.50"
+val kotlinVersion = "1.3.60"
 val vertxVersion = "3.8.3"
 val coroutinesVersion = "1.3.2"
 
 plugins {
-    kotlin("jvm") version "1.3.50"
+    kotlin("jvm") version "1.3.60"
 }
 
 group = "io.kvarto"
@@ -16,8 +16,8 @@ java.sourceCompatibility = JavaVersion.VERSION_1_8
 
 repositories {
     mavenCentral()
+    maven("https://oss.jfrog.org/artifactory/oss-snapshot-local")
 }
-
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
@@ -26,7 +26,10 @@ dependencies {
     implementation("io.vertx:vertx-web-client:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
+    implementation("io.vertx:vertx-circuit-breaker:$vertxVersion")
     implementation("org.apache.httpcomponents:httpclient:4.5.10")
+    implementation("io.opentelemetry:opentelemetry-api:0.2.0-SNAPSHOT")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
     testImplementation("org.assertj:assertj-core:3.14.0")
