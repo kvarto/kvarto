@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-val kotlinVersion = "1.3.60"
-val vertxVersion = "3.8.3"
+val kotlinVersion = "1.3.61"
+val vertxVersion = "3.8.4"
 val coroutinesVersion = "1.3.2"
 
 plugins {
@@ -20,6 +20,7 @@ repositories {
 }
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:$kotlinVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutinesVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$coroutinesVersion")
     implementation("io.vertx:vertx-web:$vertxVersion")
@@ -29,7 +30,8 @@ dependencies {
     implementation("io.vertx:vertx-circuit-breaker:$vertxVersion")
     implementation("org.apache.httpcomponents:httpclient:4.5.10")
     implementation("io.opentelemetry:opentelemetry-api:0.2.0-SNAPSHOT")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7") { exclude("org.jetbrains.kotlin") }
+    implementation("io.github.classgraph:classgraph:4.8.58")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
     testImplementation("org.assertj:assertj-core:3.14.0")
