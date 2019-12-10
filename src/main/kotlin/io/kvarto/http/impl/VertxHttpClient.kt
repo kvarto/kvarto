@@ -2,6 +2,7 @@ package io.kvarto.http.impl
 
 import io.kvarto.http.*
 import io.kvarto.http.HttpClient
+import io.kvarto.utils.writeAwait
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*

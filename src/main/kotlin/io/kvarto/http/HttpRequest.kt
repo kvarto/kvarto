@@ -1,5 +1,7 @@
 package io.kvarto.http
 
+import io.kvarto.utils.resolve
+import io.kvarto.utils.seconds
 import java.net.URL
 import java.time.Duration
 
