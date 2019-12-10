@@ -34,8 +34,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         }
         val vertxReq = client.request(method, options)
         vertxReq.setTimeout(context.timeout.toMillis())
-        val byteArrayReqBodyFlow = request.body.content().map { Buffer.buffer(it) }
-        vertxReq.writeAwait(byteArrayReqBodyFlow)
+        vertxReq.writeAwait(request.body.content().map { Buffer.buffer(it) })
 
         val vertxResponse = suspendCoroutine<HttpClientResponse> { cont ->
             vertxReq.handler {
