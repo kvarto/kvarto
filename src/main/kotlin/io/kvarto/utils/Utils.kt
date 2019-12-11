@@ -1,6 +1,6 @@
 package io.kvarto.utils
 
-import io.kvarto.http.Body
+import io.kvarto.http.common.Body
 import io.vertx.core.streams.WriteStream
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect

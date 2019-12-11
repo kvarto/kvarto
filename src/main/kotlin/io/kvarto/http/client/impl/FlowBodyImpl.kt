@@ -1,6 +1,6 @@
-package io.kvarto.http.impl
+package io.kvarto.http.client.impl
 
-import io.kvarto.http.Body
+import io.kvarto.http.common.Body
 import kotlinx.coroutines.flow.Flow
 
 

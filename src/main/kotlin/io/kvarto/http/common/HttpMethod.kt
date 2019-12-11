@@ -1,4 +1,4 @@
-package io.kvarto.http
+package io.kvarto.http.common
 
 
 enum class HttpMethod {

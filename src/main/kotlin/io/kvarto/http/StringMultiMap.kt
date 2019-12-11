@@ -1,6 +1,6 @@
 package io.kvarto.http
 
-import io.kvarto.http.impl.StringMultiMapImpl
+import io.kvarto.http.client.impl.StringMultiMapImpl
 
 interface StringMultiMap {
     operator fun get(name: String): String?

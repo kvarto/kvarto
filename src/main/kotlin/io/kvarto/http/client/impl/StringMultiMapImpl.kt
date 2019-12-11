@@ -1,4 +1,4 @@
-package io.kvarto.http.impl
+package io.kvarto.http.client.impl
 
 import io.kvarto.http.StringMultiMap
 import io.vertx.core.MultiMap

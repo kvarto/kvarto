@@ -1,6 +1,6 @@
-package io.kvarto.http
+package io.kvarto.http.common
 
-import io.kvarto.http.HttpStatus.*
+import io.kvarto.http.common.HttpStatus.*
 
 
 enum class HttpStatus(val code: Int) {

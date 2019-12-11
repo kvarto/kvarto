@@ -1,7 +1,9 @@
-package io.kvarto.http.impl
+package io.kvarto.http.client.impl
 
-import io.kvarto.http.*
-import io.kvarto.http.HttpClient
+import io.kvarto.http.StringMultiMap
+import io.kvarto.http.client.HttpClient
+import io.kvarto.http.client.RequestContext
+import io.kvarto.http.common.*
 import io.kvarto.utils.writeAwait
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
