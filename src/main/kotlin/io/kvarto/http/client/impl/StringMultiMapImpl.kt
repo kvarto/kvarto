@@ -4,8 +4,9 @@ import io.kvarto.http.StringMultiMap
 import io.vertx.core.MultiMap
 
 
-internal class StringMultiMapImpl : StringMultiMap { //TODO: replace with more efficient impl
+internal class StringMultiMapImpl(
     private val impl: MultiMap = MultiMap.caseInsensitiveMultiMap()
+): StringMultiMap { //TODO: replace with more efficient impl
 
     override fun get(name: String): String? = impl[name]
 
@@ -51,3 +52,5 @@ internal class StringMultiMapImpl : StringMultiMap { //TODO: replace with more e
         append('}')
     }
 }
+
+fun MultiMap.toStringMultiMap(): StringMultiMap = StringMultiMapImpl(this)

@@ -4,13 +4,12 @@ import io.kvarto.http.StringMultiMap
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.client.RequestContext
 import io.kvarto.http.common.*
-import io.kvarto.utils.writeAwait
+import io.kvarto.utils.toFlow
+import io.kvarto.utils.writeTo
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
-import io.vertx.kotlin.coroutines.toChannel
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
 import kotlin.coroutines.suspendCoroutine
@@ -36,8 +35,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         }
         val vertxReq = client.request(method, options)
         vertxReq.setTimeout(context.timeout.toMillis())
-        vertxReq.writeAwait(request.body.content().map { Buffer.buffer(it) })
-
+        request.body.content().map { Buffer.buffer(it) }.writeTo(vertxReq)
         val vertxResponse = suspendCoroutine<HttpClientResponse> { cont ->
             vertxReq.handler {
                 cont.resumeWith(Result.success(it))
@@ -50,12 +48,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         val status = HttpStatus.fromCode(vertxResponse.statusCode())
         val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
 
-        val responseBodyChannel = vertxResponse.toChannel(vertx)
-        val responseBodyFlow = flow {
-            for (elem in responseBodyChannel) {
-                emit(elem.bytes)
-            }
-        }
+        val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
         return HttpResponse(status, headers, Body(responseBodyFlow))
     }
 }

@@ -1,9 +1,11 @@
 package io.kvarto.utils
 
 import io.kvarto.http.common.Body
+import io.vertx.core.Vertx
+import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
+import io.vertx.kotlin.coroutines.toChannel
+import kotlinx.coroutines.flow.*
 import java.net.URL
 import java.nio.MappedByteBuffer
 import java.nio.charset.Charset
@@ -23,10 +25,10 @@ suspend fun Body.asBytes(): ByteArray {
 
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)
 
-internal suspend fun <T> WriteStream<T>.writeAwait(flow: Flow<T>) {
-    flow.collect { elem ->
-        waitTillWritable()
-        write(elem)
+internal suspend fun <T> Flow<T>.writeTo(stream: WriteStream<T>) {
+    collect { elem ->
+        stream.waitTillWritable()
+        stream.write(elem)
     }
 }
 
@@ -39,6 +41,15 @@ internal suspend fun <T> WriteStream<T>.waitTillWritable() {
             exceptionHandler {
                 cont.resumeWith(Result.failure(it))
             }
+        }
+    }
+}
+
+internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
+    val ch = toChannel(vertx)
+    return flow {
+        for (elem in ch) {
+            emit(elem)
         }
     }
 }
