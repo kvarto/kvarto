@@ -27,6 +27,12 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             request.headers.values().forEach { (name, value) ->
                 addHeader(name, value)
             }
+            val length = request.body.contextLength()
+            if (length != null) {
+                addHeader("Content-Length", length.toString())
+            } else {
+                addHeader("Transfer-Encoding", "chunked")
+            }
             uri = URIBuilder(request.url.toURI()).apply {
                 for ((name, value) in request.params.values()) {
                     addParameter(name, value)

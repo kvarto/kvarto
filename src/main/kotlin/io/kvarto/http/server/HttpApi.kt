@@ -46,6 +46,12 @@ abstract class HttpApi(
         response.headers.values().forEach { (name, value) ->
             putHeader(name, value)
         }
+        val length = response.body.contextLength()
+        if (length != null) {
+            putHeader("Content-Length", length.toString())
+        } else {
+            putHeader("Transfer-Encoding", "chunked")
+        }
         response.body.content().collect {
             ch.send(Buffer.buffer(it))
         }
