@@ -37,8 +37,8 @@ private suspend fun testHttpBin(client: HttpClient) {
         .addHeader("header1", "value1")
 
     println("about to send $request")
-    val context = RequestMetadata(timeout = 10.seconds)
-    val response = client.send(request, context)
+    val metadata = RequestMetadata(timeout = 10.seconds)
+    val response = client.send(request, metadata)
     val responseBytes = response.body.asBytes()
 //    val body = response.body.asString()
     val body = String(responseBytes)
