@@ -5,7 +5,7 @@ import io.kvarto.http.common.HttpResponse
 
 
 interface HttpClient {
-    suspend fun send(request: HttpRequest, context: RequestContext = RequestContext.EMPTY): HttpResponse
+    suspend fun send(request: HttpRequest, metadata: RequestMetadata = RequestMetadata.EMPTY): HttpResponse
 
     companion object
 }

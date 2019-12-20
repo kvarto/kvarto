@@ -1,5 +1,5 @@
 import io.kvarto.http.client.HttpClient
-import io.kvarto.http.client.RequestContext
+import io.kvarto.http.client.RequestMetadata
 import io.kvarto.http.client.impl.create
 import io.kvarto.http.common.*
 import io.kvarto.http.server.HttpApi
@@ -37,7 +37,7 @@ private suspend fun testHttpBin(client: HttpClient) {
         .addHeader("header1", "value1")
 
     println("about to send $request")
-    val context = RequestContext(timeout = 10.seconds)
+    val context = RequestMetadata(timeout = 10.seconds)
     val response = client.send(request, context)
     val responseBytes = response.body.asBytes()
 //    val body = response.body.asString()
