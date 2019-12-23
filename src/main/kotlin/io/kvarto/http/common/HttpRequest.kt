@@ -15,7 +15,7 @@ data class HttpRequest(
 
     fun withMethod(method: HttpMethod) = copy(method = method)
 
-    fun addQueryParam(name: String, value: String) = copy(params = params.add(name, value))
+    fun addParameter(name: String, value: String) = copy(params = params.add(name, value))
 
     fun addHeader(name: String, value: String) = copy(headers = headers.add(name, value))
 

@@ -16,7 +16,7 @@ import kotlin.coroutines.suspendCoroutine
 fun URL.resolve(path: String): URL = toURI().resolve(path).toURL()
 
 suspend fun Body.asBytes(): ByteArray {
-    val buf = MappedByteBuffer.allocate(4096)
+    val buf = MappedByteBuffer.allocate(contextLength() ?: 4096)
     content().collect {
         buf.put(it)
     }

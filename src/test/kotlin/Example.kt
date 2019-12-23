@@ -2,38 +2,38 @@ import io.kvarto.http.client.HttpClient
 import io.kvarto.http.client.RequestMetadata
 import io.kvarto.http.client.impl.create
 import io.kvarto.http.common.*
-import io.kvarto.http.server.HttpApi
-import io.kvarto.http.server.startHttpServer
+import io.kvarto.http.server.*
 import io.kvarto.utils.*
 import io.vertx.core.Vertx
 import io.vertx.ext.web.Router
 import java.net.URL
 
-class Example {
-
-}
 
 suspend fun main() {
     val vertx = Vertx.vertx()
-    val client = HttpClient.create(vertx)
-//    testHttpBin(client)
+    testServer(vertx)
+    vertx.close()
+}
+
+private suspend fun testServer(vertx: Vertx) {
     val api: HttpApi = object : HttpApi(vertx) {
         override fun Router.setup() {
-            get("/").operationId("op1").secure("my_scope.read").handle { req: HttpRequest ->
-                HttpResponse(body = Body("hello"))
+            get("/").operationId("op1").secure(AuthScope("my_scope.read")).handle { req: HttpRequest ->
+                HttpResponse(body = Body("hello ${req.params["name"]}"))
             }
         }
     }
     vertx.startHttpServer(8080, api)
 
-    val response = client.send(HttpRequest(URL("http://localhost:8080")))
+    val client = HttpClient.create(vertx)
+    val response = client.send(HttpRequest(URL("http://localhost:8080")).addParameter("name", "Misha"))
     println(response)
     println(response.body.asString())
 }
 
 private suspend fun testHttpBin(client: HttpClient) {
     val request = HttpRequest(URL("https://httpbin.org/get?baz=bro"))
-        .addQueryParam("foo", "bar")
+        .addParameter("foo", "bar")
         .addHeader("header1", "value1")
 
     println("about to send $request")
