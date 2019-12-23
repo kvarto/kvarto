@@ -1,6 +1,5 @@
 package io.kvarto.http.common
 
-import io.kvarto.http.StringMultiMap
 import io.kvarto.utils.resolve
 import java.net.URL
 

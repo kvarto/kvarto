@@ -2,10 +2,14 @@ import io.kvarto.http.client.HttpClient
 import io.kvarto.http.client.RequestMetadata
 import io.kvarto.http.client.impl.create
 import io.kvarto.http.common.*
-import io.kvarto.http.server.*
+import io.kvarto.http.server.AuthScope
+import io.kvarto.http.server.HttpApi
 import io.kvarto.utils.*
 import io.vertx.core.Vertx
 import io.vertx.ext.web.Router
+import io.vertx.kotlin.coroutines.dispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import java.net.URL
 
 
@@ -48,5 +52,14 @@ private suspend fun testHttpBin(client: HttpClient) {
     println("Body size: ${responseBytes.size}")
 //    val url = URL("https://ya.ru/foo/bar/")
 //    println(url.resolve("/baz/dor?a=b"))
+}
+
+
+fun testOperationId(vertx: Vertx) {
+    val scope = CoroutineScope(vertx.dispatcher() + OperationId("my_op"))
+    scope.launch {
+        println(operationId()?.value)
+    }
+    Thread.sleep(1000)
 }
 

@@ -1,6 +1,5 @@
 package io.kvarto.http.client.impl
 
-import io.kvarto.http.StringMultiMap
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.client.RequestMetadata
 import io.kvarto.http.common.*

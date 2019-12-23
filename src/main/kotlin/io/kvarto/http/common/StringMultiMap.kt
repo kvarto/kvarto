@@ -1,4 +1,4 @@
-package io.kvarto.http
+package io.kvarto.http.common
 
 import io.kvarto.http.client.impl.StringMultiMapImpl
 
@@ -13,10 +13,6 @@ interface StringMultiMap {
 
     fun addAll(params: List<Pair<String, String>>): StringMultiMap
 
-    fun addAll(params: Map<String, String>): StringMultiMap
-
-    fun addAll(params: StringMultiMap): StringMultiMap
-
     companion object {
         val EMPTY: StringMultiMap = StringMultiMapImpl()
 
@@ -25,3 +21,8 @@ interface StringMultiMap {
 }
 
 fun Map<String, String>.toMultiMap(): StringMultiMap = StringMultiMap.EMPTY.addAll(this)
+
+fun StringMultiMap.addAll(params: Map<String, String>): StringMultiMap = addAll(values())
+
+fun StringMultiMap.addAll(params: StringMultiMap): StringMultiMap = addAll(values())
+

@@ -4,14 +4,14 @@ import io.kvarto.http.client.impl.toStringMultiMap
 import io.kvarto.http.common.*
 import io.kvarto.utils.toFlow
 import io.opentelemetry.metrics.MeterFactory
+import io.opentelemetry.trace.Span
 import io.opentelemetry.trace.Tracer
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
-import io.vertx.core.http.HttpServer
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.ext.web.*
-import io.vertx.ext.web.handler.impl.BodyHandlerImpl
-import io.vertx.kotlin.coroutines.*
+import io.vertx.kotlin.coroutines.dispatcher
+import io.vertx.kotlin.coroutines.toChannel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
@@ -29,6 +29,24 @@ abstract class HttpApi(
 
     fun Route.operationId(id: String): Route = handler { ctx ->
         ctx.put(CTX_PARAM_OPERATION_ID, id)
+        if (tracer != null) {
+//            tracer.extractSpanFromHeaders
+            val span = tracer.spanBuilder(id).setSpanKind(Span.Kind.SERVER).startSpan() //add more params
+            ctx.put(CTX_PARAM_TRACE, span)
+            ctx.addBodyEndHandler {
+                span.end()
+            }
+        }
+        if (meterFactory != null) {
+            val startTime = System.currentTimeMillis()
+            ctx.addBodyEndHandler {
+                meterFactory.get("http.server")
+                    .measureLongBuilder("responseTime")
+                    .setLabelKeys(listOf(ctx.request().method().name, id))
+                    .build()
+                    .defaultHandle.record(System.currentTimeMillis() - startTime)
+            }
+        }   
         ctx.next()
     }
 
@@ -86,33 +104,6 @@ abstract class HttpApi(
 }
 
 
-suspend fun Vertx.startHttpServer(port: Int, vararg apis: HttpApi) {
-    val router = Router.router(this)
-    apis.forEach {
-        with(it) {
-            router.setup()
-        }
-    }
-    awaitResult<HttpServer> { createHttpServer().requestHandler(router).listen(port, it) }
-}
-
-fun Router.postWithBody(path: String): Route {
-    post(path).handler(BodyHandlerImpl())
-    return post(path)
-}
-fun Router.putWithBody(path: String): Route {
-    put(path).handler(BodyHandlerImpl())
-    return put(path)
-}
-fun Router.patchWithBody(path: String): Route {
-    patch(path).handler(BodyHandlerImpl())
-    return patch(path)
-}
-
-fun RoutingContext.fail(status: HttpStatus) {
-    fail(status.code)
-}
-
 //OpenTelemetry.getMeterFactory().get("http.client").gaugeLongBuilder("latency").build().getHandle(emptyList()).set(11)
 //OpenTelemetry.getMeterFactory().get("http.client").counterLongBuilder("requests.count").build().getHandle(emptyList()).add(3)
 //OpenTelemetry.getMeterFactory().get("http.client").measureLongBuilder("requests.count").build().getHandle(emptyList()).record(7)
@@ -123,3 +114,4 @@ fun RoutingContext.fail(status: HttpStatus) {
 //goal: HttpApi as function (HttpRequest) -> HttpResponse
 
 val CTX_PARAM_OPERATION_ID = "io.kvarto.OperationId"
+val CTX_PARAM_TRACE = "io.kvarto.trace"

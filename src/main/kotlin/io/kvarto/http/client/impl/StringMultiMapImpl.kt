@@ -1,6 +1,6 @@
 package io.kvarto.http.client.impl
 
-import io.kvarto.http.StringMultiMap
+import io.kvarto.http.common.StringMultiMap
 import io.vertx.core.MultiMap
 
 
@@ -27,14 +27,6 @@ internal class StringMultiMapImpl(
                 it.impl.add(name, value)
             }
         }
-
-    override fun addAll(params: Map<String, String>): StringMultiMap =
-        StringMultiMapImpl().also {
-            it.impl.addAll(impl)
-            it.impl.addAll(params)
-        }
-
-    override fun addAll(params: StringMultiMap): StringMultiMap = addAll(params.values())
 
     override fun toString(): String = buildString {
         append('{')
