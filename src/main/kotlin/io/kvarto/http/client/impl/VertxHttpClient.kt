@@ -1,7 +1,6 @@
 package io.kvarto.http.client.impl
 
 import io.kvarto.http.client.HttpClient
-import io.kvarto.http.client.RequestMetadata
 import io.kvarto.http.common.*
 import io.kvarto.utils.toFlow
 import io.kvarto.utils.writeTo
@@ -17,7 +16,7 @@ import kotlin.coroutines.suspendCoroutine
 internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : HttpClient {
     val client = vertx.createHttpClient(options)
 
-    override suspend fun send(request: HttpRequest, metadata: RequestMetadata): HttpResponse {
+    override suspend fun send(request: HttpRequest): HttpResponse {
         val method = HttpMethod.valueOf(request.method.name)
         val options = RequestOptions().apply {
             host = request.url.host
@@ -39,7 +38,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             }.build().toASCIIString()
         }
         val vertxReq = client.request(method, options)
-        vertxReq.setTimeout(metadata.timeout.toMillis())
+        vertxReq.setTimeout(request.metadata.timeout.toMillis())
         request.body.content().map { Buffer.buffer(it) }.writeTo(vertxReq)
         val vertxResponse = suspendCoroutine<HttpClientResponse> { cont ->
             vertxReq.handler {

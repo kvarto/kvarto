@@ -16,13 +16,15 @@ import java.net.URL
 suspend fun main() {
     val vertx = Vertx.vertx()
     testServer(vertx)
+    testHttpBin(vertx)
+    Thread.sleep(1000)
     vertx.close()
 }
 
 private suspend fun testServer(vertx: Vertx) {
     val api: HttpApi = object : HttpApi(vertx) {
         override fun Router.setup() {
-            get("/").operationId("op1").secure(AuthScope("my_scope.read")).handle { req: HttpRequest ->
+            get("/").operationId("op1").secure(AuthScope("my_scope.read")).handle { req ->
                 HttpResponse(body = Body("hello ${req.params["name"]}"))
             }
         }
@@ -35,14 +37,15 @@ private suspend fun testServer(vertx: Vertx) {
     println(response.body.asString())
 }
 
-private suspend fun testHttpBin(client: HttpClient) {
+private suspend fun testHttpBin(vertx: Vertx) {
+    val client = HttpClient.create(vertx)
     val request = HttpRequest(URL("https://httpbin.org/get?baz=bro"))
         .addParameter("foo", "bar")
         .addHeader("header1", "value1")
+        .withMetadata(RequestMetadata(timeout = 10.seconds))
 
     println("about to send $request")
-    val metadata = RequestMetadata(timeout = 10.seconds)
-    val response = client.send(request, metadata)
+    val response = client.send(request)
     val responseBytes = response.body.asBytes()
 //    val body = response.body.asString()
     val body = String(responseBytes)
@@ -60,6 +63,5 @@ fun testOperationId(vertx: Vertx) {
     scope.launch {
         println(operationId()?.value)
     }
-    Thread.sleep(1000)
 }
 
