@@ -24,6 +24,11 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             request.headers.values().forEach { (name, value) ->
                 addHeader(name, value)
             }
+            correlationHeader()?.let { (name, value) ->
+                if (name !in request.headers) {
+                    addHeader(name, value)
+                }
+            }
             val length = request.body.contextLength()
             if (length != null) {
                 addHeader("Content-Length", length.toString())
@@ -40,11 +45,18 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         vertxReq.setTimeout(request.metadata.timeout.toMillis())
         request.body.content().map { Buffer.buffer(it) }.writeTo(vertxReq)
         val vertxResponse = suspendCoroutine<HttpClientResponse> { cont ->
+            var waitingForResult = true
             vertxReq.handler {
-                cont.resumeWith(Result.success(it))
+                if (waitingForResult) {
+                    waitingForResult = false
+                    cont.resumeWith(Result.success(it))
+                }
             }
             vertxReq.exceptionHandler {
-                cont.resumeWith(Result.failure(it))
+                if (waitingForResult) {
+                    waitingForResult = false
+                    cont.resumeWith(Result.failure(it))
+                }
             }
             vertxReq.end()
         }

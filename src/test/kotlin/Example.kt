@@ -15,15 +15,19 @@ import java.net.URL
 
 suspend fun main() {
     val vertx = Vertx.vertx()
-    testServer(vertx)
-    testHttpBin(vertx)
-    Thread.sleep(1000)
-    vertx.close()
+    try {
+        testServer(vertx)
+        testHttpBin(vertx)
+        Thread.sleep(1000)
+    } finally {
+        vertx.close()
+    }
 }
 
 private suspend fun testServer(vertx: Vertx) {
     val api: HttpApi = object : HttpApi(vertx) {
         override fun Router.setup() {
+            setCorrelationHeader("X-Flow-ID")
             get("/").operationId("op1").secure(AuthScope("my_scope.read")).handle { req ->
                 HttpResponse(body = Body("hello ${req.params["name"]}"))
             }
@@ -32,9 +36,14 @@ private suspend fun testServer(vertx: Vertx) {
     vertx.startHttpServer(8080, api)
 
     val client = HttpClient.create(vertx)
-    val response = client.send(HttpRequest(URL("http://localhost:8080")).addParameter("name", "Misha"))
+    val request = HttpRequest(URL("http://localhost:8080"))
+        .addParameter("name", "Misha")
+        .addHeader("X-Flow-ID", "foo")
+
+    val response = client.send(request)
     println(response)
     println(response.body.asString())
+    println("X-Flow-ID: ${response.headers["X-Flow-ID"]}")
 }
 
 private suspend fun testHttpBin(vertx: Vertx) {
@@ -61,7 +70,7 @@ private suspend fun testHttpBin(vertx: Vertx) {
 fun testOperationId(vertx: Vertx) {
     val scope = CoroutineScope(vertx.dispatcher() + OperationId("my_op"))
     scope.launch {
-        println(operationId()?.value)
+        println(operationId())
     }
 }
 

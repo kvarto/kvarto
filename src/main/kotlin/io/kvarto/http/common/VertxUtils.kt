@@ -43,27 +43,49 @@ fun RoutingContext.fail(status: HttpStatus) {
 }
 
 class OperationId(val value: String) : CoroutineContext.Element {
-    override val key = OperationIdKey
+    override val key = Key
+    object Key : CoroutineContext.Key<OperationId>
 }
 
-object OperationIdKey : CoroutineContext.Key<OperationId>
 
-suspend fun operationId(): String? = coroutineContext[OperationIdKey]?.value
+suspend fun operationId(): String? = coroutineContext[OperationId.Key]?.value
 
 
 class CurrentSpan(val value: Span) : CoroutineContext.Element {
-    override val key = OperationIdKey
+    override val key = Key
+    object Key : CoroutineContext.Key<CurrentSpan>
 }
 
-object CurrentSpanKey : CoroutineContext.Key<CurrentSpan>
+suspend fun currentSpan(): Span? = coroutineContext[CurrentSpan.Key]?.value
 
-suspend fun currentSpan(): Span? = coroutineContext[CurrentSpanKey]?.value
+
+class CorrelationHeader(val name: String, val value: String) : CoroutineContext.Element {
+    override val key = Key
+    object Key : CoroutineContext.Key<CorrelationHeader>
+}
+
+suspend fun correlationHeader(): Pair<String, String>? = coroutineContext[CorrelationHeader.Key]?.let { it.name to it.value }
 
 val CTX_PARAM_OPERATION_ID = "io.kvarto.OperationId"
 
-val CTX_PARAM_SPAN = "io.kvarto.trace"
+val CTX_PARAM_SPAN = "io.kvarto.CurrentSpan"
+
+val CTX_PARAM_CORRELATION_HEADER = "io.kvarto.CorrelationHeader"
 
 fun Tracer.extract(ctx: RoutingContext): SpanContext? {
     val headers = ctx.request().headers().map { it.key to it.value }.toMap()
     return extract(Format.Builtin.HTTP_HEADERS, TextMapAdapter(headers))
+}
+
+fun Router.setCorrelationHeader(name: String) {
+    route().handler { ctx ->
+        val value: String? = ctx.request().getHeader(name)
+        if (value != null) {
+            ctx.put(CTX_PARAM_CORRELATION_HEADER, CorrelationHeader(name, value))
+            ctx.addHeadersEndHandler {
+                ctx.response().putHeader(name, value)
+            }
+        }
+        ctx.next()
+    }
 }

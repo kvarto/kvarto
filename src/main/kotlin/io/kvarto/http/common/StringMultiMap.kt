@@ -26,3 +26,5 @@ fun StringMultiMap.addAll(params: Map<String, String>): StringMultiMap = addAll(
 
 fun StringMultiMap.addAll(params: StringMultiMap): StringMultiMap = addAll(values())
 
+operator fun StringMultiMap.contains(key: String): Boolean = get(key) != null
+

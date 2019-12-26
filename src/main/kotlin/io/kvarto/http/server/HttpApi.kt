@@ -5,7 +5,6 @@ import io.kvarto.http.common.*
 import io.kvarto.utils.toFlow
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
-import io.opentracing.Span
 import io.opentracing.Tracer
 import io.opentracing.tag.Tags
 import io.vertx.core.Vertx
@@ -33,7 +32,7 @@ abstract class HttpApi(
     abstract fun Router.setup()
 
     fun Route.operationId(id: String): Route = handler { ctx ->
-        ctx.put(CTX_PARAM_OPERATION_ID, id)
+        ctx.put(CTX_PARAM_OPERATION_ID, OperationId(id))
         tracer?.handleTracing(ctx, id)
         registry?.handleMetrics(ctx, id)
         ctx.next()
@@ -75,9 +74,10 @@ abstract class HttpApi(
     }
 
     private fun createScope(ctx: RoutingContext): CoroutineScope {
-        val operationId = ctx.get<String?>(CTX_PARAM_OPERATION_ID)?.let(::OperationId) ?: EmptyCoroutineContext
-        val currentSpan = ctx.get<Span?>(CTX_PARAM_SPAN)?.let(::CurrentSpan) ?: EmptyCoroutineContext
-        return CoroutineScope(vertx.dispatcher() + operationId + currentSpan)
+        val operationId = ctx.get<OperationId?>(CTX_PARAM_OPERATION_ID) ?: EmptyCoroutineContext
+        val currentSpan = ctx.get<CurrentSpan?>(CTX_PARAM_SPAN) ?: EmptyCoroutineContext
+        val correlationHeader = ctx.get<CorrelationHeader?>(CTX_PARAM_CORRELATION_HEADER) ?: EmptyCoroutineContext
+        return CoroutineScope(vertx.dispatcher() + operationId + currentSpan + correlationHeader)
     }
 }
 
@@ -99,7 +99,7 @@ private fun Tracer.handleTracing(ctx: RoutingContext, operationId: String) {
         .withTag(Tags.SPAN_KIND, Tags.SPAN_KIND_SERVER)
         .asChildOf(context)
         .start() //add more params
-    ctx.put(CTX_PARAM_SPAN, span)
+    ctx.put(CTX_PARAM_SPAN, CurrentSpan(span))
     ctx.addBodyEndHandler {
         span.finish()
     }
