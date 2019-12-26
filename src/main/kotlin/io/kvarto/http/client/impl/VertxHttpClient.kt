@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
 import kotlin.coroutines.suspendCoroutine
 
-//TODO: add open tracing and metrics
 internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : HttpClient {
     val client = vertx.createHttpClient(options)
 

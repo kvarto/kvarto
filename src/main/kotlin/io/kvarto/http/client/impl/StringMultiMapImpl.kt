@@ -6,7 +6,7 @@ import io.vertx.core.MultiMap
 
 internal class StringMultiMapImpl(
     private val impl: MultiMap = MultiMap.caseInsensitiveMultiMap()
-): StringMultiMap { //TODO: replace with more efficient impl
+): StringMultiMap {
 
     override fun get(name: String): String? = impl[name]
 

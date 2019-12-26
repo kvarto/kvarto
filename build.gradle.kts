@@ -28,8 +28,9 @@ dependencies {
     implementation("io.vertx:vertx-lang-kotlin:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
     implementation("io.vertx:vertx-circuit-breaker:$vertxVersion")
+    implementation("io.micrometer:micrometer-core:1.3.2")
+    implementation("io.opentracing:opentracing-api:0.33.0")
     implementation("org.apache.httpcomponents:httpclient:4.5.10")
-    implementation("io.opentelemetry:opentelemetry-api:0.2.0-SNAPSHOT")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7") { exclude("org.jetbrains.kotlin") }
     implementation("io.github.classgraph:classgraph:4.8.58")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")

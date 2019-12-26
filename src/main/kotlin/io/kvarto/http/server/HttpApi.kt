@@ -3,115 +3,130 @@ package io.kvarto.http.server
 import io.kvarto.http.client.impl.toStringMultiMap
 import io.kvarto.http.common.*
 import io.kvarto.utils.toFlow
-import io.opentelemetry.metrics.MeterFactory
-import io.opentelemetry.trace.Span
-import io.opentelemetry.trace.Tracer
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tag
+import io.opentracing.Span
+import io.opentracing.Tracer
+import io.opentracing.tag.Tags
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.ext.web.*
 import io.vertx.kotlin.coroutines.dispatcher
 import io.vertx.kotlin.coroutines.toChannel
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import java.net.URL
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.EmptyCoroutineContext
 
 
 abstract class HttpApi(
     val vertx: Vertx,
     val securityManager: SecurityManager? = null,
     val tracer: Tracer? = null,
-    val meterFactory: MeterFactory? = null
+    val registry: MeterRegistry? = null
 ) {
 
     abstract fun Router.setup()
 
     fun Route.operationId(id: String): Route = handler { ctx ->
         ctx.put(CTX_PARAM_OPERATION_ID, id)
-        if (tracer != null) {
-//            tracer.extractSpanFromHeaders
-            val span = tracer.spanBuilder(id).setSpanKind(Span.Kind.SERVER).startSpan() //add more params
-            ctx.put(CTX_PARAM_TRACE, span)
-            ctx.addBodyEndHandler {
-                span.end()
-            }
-        }
-        if (meterFactory != null) {
-            val startTime = System.currentTimeMillis()
-            ctx.addBodyEndHandler {
-                meterFactory.get("http.server")
-                    .measureLongBuilder("responseTime")
-                    .setLabelKeys(listOf(ctx.request().method().name, id))
-                    .build()
-                    .defaultHandle.record(System.currentTimeMillis() - startTime)
-            }
-        }   
+        tracer?.handleTracing(ctx, id)
+        registry?.handleMetrics(ctx, id)
         ctx.next()
     }
 
+
     fun Route.secure(scope: AuthScope): Route = handler { ctx ->
         if (securityManager != null) {
-            GlobalScope.launch(vertx.dispatcher()) {
-                try {
-                    val authorized = securityManager.hasScope(ctx, scope)
-                    if (authorized) {
-                        ctx.next()
-                    } else {
-                        ctx.fail(HttpStatus.UNAUTHORIZED)
-                    }
-                } catch (e: Exception) {
-                    ctx.fail(e)
-                }
-            }
+            securityManager.handleSecurity(ctx, scope)
         } else {
             ctx.next()
         }
     }
 
     fun Route.handle(requestHandler: suspend (HttpRequest) -> HttpResponse): Route = handler { ctx ->
-        CoroutineScope(vertx.dispatcher()).launch {
-            val response = requestHandler(ctx.toHttpRequest())
-            ctx.response().end(response)
+        createScope(ctx).launch {
+            try {
+                val response = requestHandler(ctx.toHttpRequest(vertx))
+                ctx.response().end(vertx, response)
+            } catch (e: Exception) {
+                ctx.fail(e)
+            }
         }
     }
 
-    suspend fun HttpServerResponse.end(response: HttpResponse) {
-        val ch = toChannel(vertx)
-        statusCode = response.status.code
-        response.headers.values().forEach { (name, value) ->
-            putHeader(name, value)
-        }
-        val length = response.body.contextLength()
-        if (length != null) {
-            putHeader("Content-Length", length.toString())
-        } else {
-            putHeader("Transfer-Encoding", "chunked")
-        }
-        response.body.content().collect {
-            ch.send(Buffer.buffer(it))
+    private fun SecurityManager.handleSecurity(ctx: RoutingContext, authScope: AuthScope) {
+        createScope(ctx).launch {
+            try {
+                val authorized = hasScope(ctx, authScope)
+                if (authorized) {
+                    ctx.next()
+                } else {
+                    ctx.fail(HttpStatus.UNAUTHORIZED)
+                }
+            } catch (e: Exception) {
+                ctx.fail(e)
+            }
         }
     }
 
-    fun RoutingContext.toHttpRequest(): HttpRequest {
-        val req = request()
-        val method = HttpMethod.valueOf(req.method().name)
-        val headers = req.headers().toStringMultiMap()
-        val params = req.params().toStringMultiMap()
-        val body = req.toFlow(vertx).map { it.bytes }
-        return HttpRequest(URL(req.absoluteURI()), method, headers, params, Body(body))
+    private fun createScope(ctx: RoutingContext): CoroutineScope {
+        val operationId = ctx.get<String?>(CTX_PARAM_OPERATION_ID)?.let(::OperationId) ?: EmptyCoroutineContext
+        val currentSpan = ctx.get<Span?>(CTX_PARAM_SPAN)?.let(::CurrentSpan) ?: EmptyCoroutineContext
+        return CoroutineScope(vertx.dispatcher() + operationId + currentSpan)
     }
 }
 
+private fun MeterRegistry.handleMetrics(ctx: RoutingContext, operationId: String) {
+    val startTime = System.currentTimeMillis()
+    ctx.addBodyEndHandler {
+        val duration = System.currentTimeMillis() - startTime
+        val tags = listOf(
+            Tag.of("operationId", operationId),
+            Tag.of("method", ctx.request().method().name)
+        )
+        timer("http.server.responseTime", tags).record(duration, TimeUnit.MILLISECONDS)
+    }
+}
 
-//OpenTelemetry.getMeterFactory().get("http.client").gaugeLongBuilder("latency").build().getHandle(emptyList()).set(11)
-//OpenTelemetry.getMeterFactory().get("http.client").counterLongBuilder("requests.count").build().getHandle(emptyList()).add(3)
-//OpenTelemetry.getMeterFactory().get("http.client").measureLongBuilder("requests.count").build().getHandle(emptyList()).record(7)
-//OpenTelemetry.getTracerFactory().get("my.tracer").currentSpan
+private fun Tracer.handleTracing(ctx: RoutingContext, operationId: String) {
+    val context = extract(ctx)
+    val span = buildSpan(operationId)
+        .withTag(Tags.SPAN_KIND, Tags.SPAN_KIND_SERVER)
+        .asChildOf(context)
+        .start() //add more params
+    ctx.put(CTX_PARAM_SPAN, span)
+    ctx.addBodyEndHandler {
+        span.finish()
+    }
+}
 
-//path parameters?
-//routing for HttpRequest without Router?
-//goal: HttpApi as function (HttpRequest) -> HttpResponse
+private fun RoutingContext.toHttpRequest(vertx: Vertx): HttpRequest {
+    val req = request()
+    val method = HttpMethod.valueOf(req.method().name)
+    val headers = req.headers().toStringMultiMap()
+    val params = req.params().toStringMultiMap()
+    val body = req.toFlow(vertx).map { it.bytes }
+    return HttpRequest(URL(req.absoluteURI()), method, headers, params, Body(body))
+}
 
-val CTX_PARAM_OPERATION_ID = "io.kvarto.OperationId"
-val CTX_PARAM_TRACE = "io.kvarto.trace"
+private suspend fun HttpServerResponse.end(vertx: Vertx, response: HttpResponse) {
+    val ch = toChannel(vertx)
+    statusCode = response.status.code
+    response.headers.values().forEach { (name, value) ->
+        putHeader(name, value)
+    }
+    val length = response.body.contextLength()
+    if (length != null) {
+        putHeader("Content-Length", length.toString())
+    } else {
+        putHeader("Transfer-Encoding", "chunked")
+    }
+    response.body.content().collect {
+        ch.send(Buffer.buffer(it))
+    }
+}
