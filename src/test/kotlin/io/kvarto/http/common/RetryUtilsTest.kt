@@ -20,6 +20,36 @@ class RetryUtilsTest {
     }
     
     @Test
+    fun `retries on retryable exception`() = testBlocking {
+        var count = 0
+        val expected = 100500
+        val actual = retry(RetryConfig(4, isRetryable = { it == TheDamnTable })) {
+            count++
+            if (count <= 2) {
+                throw TheDamnTable
+            }
+            expected
+        }
+
+        assertEquals(expected, actual)
+        assertEquals(3, count)
+    }
+
+    @Test
+    fun `retry on non-retryable exception`() = testBlocking {
+        var count = 0
+        val expected = Exception("(╯°□°)╯︵ ┻━┻")
+        val actual = assertThrows<Exception> {
+            retry<Unit>(RetryConfig(10)) {
+                count++
+                throw expected
+            }
+        }
+        assertSame(expected, actual)
+        assertEquals(1, count)
+    }
+
+    @Test
     fun `no retry executes code exactly once`() = testBlocking {
         var count = 0
         retry(NO_RETRY) {
@@ -37,21 +67,6 @@ class RetryUtilsTest {
                 throw IOException("test")
             }
         }
-        assertEquals(1, count)
-    }
-
-
-    @Test
-    fun `retry on non retryable exception`() = testBlocking {
-        var count = 0
-        val expected = Exception("(╯°□°)╯︵ ┻━┻")
-        val actual = assertThrows<Exception> {
-            retry<Unit>(RetryConfig(10)) {
-                count++
-                throw expected
-            }
-        }
-        assertSame(expected, actual)
         assertEquals(1, count)
     }
 }

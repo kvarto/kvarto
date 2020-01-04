@@ -14,7 +14,7 @@ suspend fun <T> retry(config: RetryConfig, f: suspend () -> T): T {
         try {
             return f()
         } catch (e: Throwable) {
-            if (!isRetryable(e)) throw e else lastThrowable = e
+            if (!config.isRetryable(e)) throw e else lastThrowable = e
             delay(config.backoffStrategy.getDelay(it))
         }
     }
