@@ -1,7 +1,6 @@
 package io.kvarto.http.client
 
-import io.kvarto.http.common.HttpStatus
-import io.kvarto.http.common.SUCCESS_STATUSES
+import io.kvarto.http.common.*
 import io.kvarto.utils.seconds
 import java.time.Duration
 
@@ -17,19 +16,3 @@ data class RequestMetadata(
     }
 }
 
-data class RetryConfig(
-    val retries: Int,
-    val backoffStrategy: BackoffStrategy,
-    val totalTimeout: Duration,
-    val isRetryable: (Throwable) -> Boolean
-)
-
-interface BackoffStrategy {
-    fun delayBeforeNextRetry(round: Int): Duration
-}
-
-val NO_BACKOFF = object : BackoffStrategy {
-    override fun delayBeforeNextRetry(round: Int): Duration = Duration.ZERO
-}
-
-val NO_RETRY = RetryConfig(0, NO_BACKOFF, Duration.ofMillis(Long.MAX_VALUE), isRetryable = { false })
