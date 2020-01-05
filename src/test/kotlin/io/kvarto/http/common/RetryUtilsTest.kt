@@ -111,4 +111,22 @@ class RetryUtilsTest {
             assertEquals(expected, unit.getDelayBeforeRetry(it))
         }
     }
+
+    @Test
+    fun `exponential backoff strategy`() {
+        val unit = ExponentialBackoffStrategy(10.millis, 3)
+        assertEquals(10.millis, unit.getDelayBeforeRetry(1))
+        assertEquals(30.millis, unit.getDelayBeforeRetry(2))
+        assertEquals(90.millis, unit.getDelayBeforeRetry(3))
+        assertEquals(270.millis, unit.getDelayBeforeRetry(4))
+    }
+
+    @Test
+    fun `fibonacci backoff strategy`() {
+        val unit = FibonacciBackoffStrategy(10.millis)
+        val numbers = listOf(1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987)
+        numbers.forEachIndexed { i, number ->
+            assertEquals(number * 10L, unit.getDelayBeforeRetry(i + 1).toMillis(), "$i")
+        }
+    }
 }
