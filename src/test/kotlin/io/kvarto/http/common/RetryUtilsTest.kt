@@ -1,9 +1,12 @@
 package io.kvarto.http.common
 
+import io.kvarto.utils.days
+import io.kvarto.utils.millis
+import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.io.IOException
-import kotlin.test.assertEquals
-import kotlin.test.assertSame
+import java.time.Duration
+import kotlin.test.*
 
 class RetryUtilsTest {
     @Test
@@ -34,6 +37,36 @@ class RetryUtilsTest {
         assertEquals(expected, actual)
         assertEquals(3, count)
     }
+
+    @Test
+    fun `retry happen after specified timeout`() = testBlocking {
+        val retryNumbers = mutableListOf<Int>()
+        val invocationTimes = mutableListOf<Long>()
+
+        val strategy = object : BackoffStrategy {
+            override fun getDelayBeforeRetry(retryNumber: Int): Duration {
+                retryNumbers += retryNumber
+                return (25 * retryNumber).millis
+            }
+        }
+        val config = RetryConfig(10, strategy, isRetryable = { true })
+        val startTime = System.currentTimeMillis()
+
+        retry(config) {
+            invocationTimes += System.currentTimeMillis()
+            if (invocationTimes.size <= 3) throw TheDamnTable
+            0
+        }
+
+        assertEquals(listOf(1, 2, 3), retryNumbers)
+        assertThat(invocationTimes).hasSize(4)
+        val (t0, t1, t2, t3) = invocationTimes
+        assertTrue(t0 - startTime < 100)
+        assertTrue(t1 - t0 >= 25)
+        assertTrue(t2 - t1 >= 50)
+        assertTrue(t3 - t2 >= 75)
+    }
+
 
     @Test
     fun `retry on non-retryable exception`() = testBlocking {
@@ -68,5 +101,14 @@ class RetryUtilsTest {
             }
         }
         assertEquals(1, count)
+    }
+
+    @Test
+    fun `constant backoff strategy`() {
+        val expected = 12.days
+        val unit = ConstantBackoffStrategy(expected)
+        repeat(10) {
+            assertEquals(expected, unit.getDelayBeforeRetry(it))
+        }
     }
 }

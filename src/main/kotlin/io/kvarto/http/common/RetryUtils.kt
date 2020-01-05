@@ -15,7 +15,7 @@ suspend fun <T> retry(config: RetryConfig, f: suspend () -> T): T {
             return f()
         } catch (e: Throwable) {
             if (!config.isRetryable(e)) throw e else lastThrowable = e
-            delay(config.backoffStrategy.getDelay(it))
+            delay(config.backoffStrategy.getDelayBeforeRetry(it + 1))
         }
     }
     throw RetriesLimitReachedException("Reached", lastThrowable!!)
@@ -41,15 +41,19 @@ data class RetryConfig(
 )
 
 interface BackoffStrategy {
-    fun getDelay(round: Int): Duration
+    fun getDelayBeforeRetry(retryNumber: Int): Duration
 }
 
-class LinearBackoffStrategy(val timeout: Duration) : BackoffStrategy {
-    override fun getDelay(round: Int): Duration = (timeout.toMillis() * round).millis
+class ConstantBackoffStrategy(val timeout: Duration) : BackoffStrategy {
+    override fun getDelayBeforeRetry(retryNumber: Int): Duration = timeout
+}
+class ExponentialBackoffStrategy(val timeout: Duration, val multiplier: Int) : BackoffStrategy {
+    override fun getDelayBeforeRetry(retryNumber: Int): Duration =
+        (timeout.toMillis() * Math.pow(multiplier.toDouble(), retryNumber.toDouble() - 1)).toLong().millis
 }
 
 class FibonacciBackoffStrategy(val base: Duration) : BackoffStrategy {
-    override fun getDelay(round: Int): Duration = (base.toMillis() * fib(round)).millis
+    override fun getDelayBeforeRetry(retryNumber: Int): Duration = (base.toMillis() * fib(retryNumber)).millis
     
     private fun fib(n: Int): Int {
         if (n < 2) return 1
@@ -65,7 +69,7 @@ class FibonacciBackoffStrategy(val base: Duration) : BackoffStrategy {
 }
 
 val NO_BACKOFF = object : BackoffStrategy {
-    override fun getDelay(round: Int): Duration = Duration.ZERO
+    override fun getDelayBeforeRetry(retryNumber: Int): Duration = Duration.ZERO
 }
 
 val NO_RETRY = RetryConfig(0, NO_BACKOFF, Duration.ofMillis(Long.MAX_VALUE))
