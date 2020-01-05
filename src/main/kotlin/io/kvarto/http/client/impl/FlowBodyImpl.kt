@@ -4,8 +4,8 @@ import io.kvarto.http.common.Body
 import kotlinx.coroutines.flow.Flow
 
 
-internal class FlowBodyImpl(val contextLength: Int?, val flow: Flow<ByteArray>) : Body {
-    override fun contextLength(): Int? = contextLength
+internal class FlowBodyImpl(val length: Int?, val flow: Flow<ByteArray>) : Body {
+    override fun length(): Int? = length
     override fun content(): Flow<ByteArray> = flow
     override fun toString(): String = "FlowBodyImpl(...)"
 }

@@ -4,7 +4,7 @@ import io.kvarto.http.client.impl.FlowBodyImpl
 import kotlinx.coroutines.flow.*
 
 interface Body {
-    fun contextLength(): Int?
+    fun length(): Int?
 
     fun content(): Flow<ByteArray>
 

@@ -120,7 +120,7 @@ private suspend fun HttpServerResponse.end(vertx: Vertx, response: HttpResponse)
     response.headers.values().forEach { (name, value) ->
         putHeader(name, value)
     }
-    val length = response.body.contextLength()
+    val length = response.body.length()
     if (length != null) {
         putHeader("Content-Length", length.toString())
     } else {
