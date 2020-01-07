@@ -25,7 +25,11 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
             val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
 
-            HttpResponse(status, headers, Body(responseBodyFlow))
+            val response = HttpResponse(status, headers, Body(responseBodyFlow))
+            if (response.status !in request.metadata.successStatuses) {
+                throw UnexpectedHttpStatusException(response)
+            }
+            response
         }
 
     private suspend fun sendRequest(vertxRequest: HttpClientRequest, body: Flow<ByteArray>): HttpClientResponse {
@@ -85,5 +89,8 @@ private val DEFAULT_OPTIONS = HttpClientOptions()
 
 fun HttpClient.Companion.create(vertx: Vertx, options: HttpClientOptions = DEFAULT_OPTIONS): HttpClient =
     VertxHttpClient(vertx, options)
+
+class UnexpectedHttpStatusException(val response: HttpResponse):
+    RuntimeException("Got ${response.status} ${response.status.code}")
 
 

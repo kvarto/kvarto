@@ -2,7 +2,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 val kotlinVersion = "1.3.61"
 val vertxVersion = "3.8.4"
-val coroutinesVersion = "1.3.2"
+val coroutinesVersion = "1.3.3"
 
 plugins {
     kotlin("jvm") version "1.3.60"

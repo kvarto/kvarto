@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.net.ServerSocket
 import java.net.URL
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.EmptyCoroutineContext
@@ -130,3 +131,29 @@ private suspend fun HttpServerResponse.end(vertx: Vertx, response: HttpResponse)
         ch.send(Buffer.buffer(it))
     }
 }
+
+fun httpApi(
+    vertx: Vertx,
+    securityManager: SecurityManager? = null,
+    tracer: Tracer? = null,
+    registry: MeterRegistry? = null,
+    f: HttpApi.(Router) -> Unit
+): HttpApi =
+    object : HttpApi(vertx, securityManager, tracer, registry) {
+        override fun Router.setup() {
+            f(this)
+        }
+    }
+
+fun response(body: String): HttpResponse = HttpResponse(body = Body(body))
+
+fun HttpResponse.addHeader(name: String, value: String) = copy(headers = headers.add(name, value))
+
+fun HttpResponse.withStatus(status: HttpStatus) = copy(status = status)
+
+fun getFreePort(): Int =
+    ServerSocket(0).let {
+        val port = it.localPort
+        it.close()
+        port
+    }
