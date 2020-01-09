@@ -16,10 +16,15 @@ internal class VertxHttpClientTest {
 
     @Test
     fun `get success`() = testBlocking {
+        println("starting server")
         val api = httpApi(vertx) {
+            it.errorHandler(HttpStatus.INTERNAL_SERVER_ERROR.code) { ctx ->
+                ctx.failure().printStackTrace()
+            }
             it.get("/").handle { req -> response("hello") }
         }
         vertx.startHttpServer(port, api)
+        println("server started")
 
         val client = HttpClient.create(vertx)
         val req = HttpRequest(URL("http://localhost:$port"))

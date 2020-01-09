@@ -2,7 +2,7 @@ package io.kvarto.http.server
 
 import io.kvarto.http.client.impl.toStringMultiMap
 import io.kvarto.http.common.*
-import io.kvarto.utils.toFlow
+import io.kvarto.utils.writeTo
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
 import io.opentracing.Tracer
@@ -10,11 +10,10 @@ import io.opentracing.tag.Tags
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServerResponse
+import io.vertx.core.json.Json
 import io.vertx.ext.web.*
 import io.vertx.kotlin.coroutines.dispatcher
-import io.vertx.kotlin.coroutines.toChannel
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.net.ServerSocket
@@ -30,7 +29,7 @@ abstract class HttpApi(
     val registry: MeterRegistry? = null
 ) {
 
-    abstract fun Router.setup()
+    abstract fun setup(router: Router)
 
     fun Route.operationId(id: String): Route = handler { ctx ->
         ctx.put(CTX_PARAM_OPERATION_ID, OperationId(id))
@@ -52,7 +51,7 @@ abstract class HttpApi(
         createScope(ctx).launch {
             try {
                 val response = requestHandler(ctx.toHttpRequest(vertx))
-                ctx.response().end(vertx, response)
+                ctx.response().end(response)
             } catch (e: Exception) {
                 ctx.fail(e)
             }
@@ -111,24 +110,32 @@ private fun RoutingContext.toHttpRequest(vertx: Vertx): HttpRequest {
     val method = HttpMethod.valueOf(req.method().name)
     val headers = req.headers().toStringMultiMap()
     val params = req.params().toStringMultiMap()
-    val body = req.toFlow(vertx).map { it.bytes }
-    return HttpRequest(URL(req.absoluteURI()), method, headers, params, Body(body))
+//    val body = req.toFlow(vertx).map { it.bytes }
+    val body = if (body != null) Body(body.bytes) else Body.EMPTY // TODO: implement request body streaming
+    return HttpRequest(URL(req.absoluteURI()), method, headers, params, body)
 }
 
-private suspend fun HttpServerResponse.end(vertx: Vertx, response: HttpResponse) {
-    val ch = toChannel(vertx)
+private suspend fun HttpServerResponse.end(response: HttpResponse) {
     statusCode = response.status.code
     response.headers.values().forEach { (name, value) ->
         putHeader(name, value)
     }
-    val length = response.body.length()
-    if (length != null) {
-        putHeader("Content-Length", length.toString())
-    } else {
-        putHeader("Transfer-Encoding", "chunked")
-    }
-    response.body.content().collect {
-        ch.send(Buffer.buffer(it))
+    return when (response.body) {
+        is EmptyBody -> end()
+        is ByteArrayBody -> {
+            putHeader("Content-Length", response.body.value.size.toString())
+            end(Buffer.buffer(response.body.value))
+        }
+        is JsonBody -> {
+            val bytes = Json.mapper.writeValueAsBytes(response.body.value)
+            putHeader("Content-Type", "application/json")
+            putHeader("Content-Length", bytes.size.toString())
+            end(Buffer.buffer(bytes))
+        }
+        is FlowBody -> {
+            putHeader("Transfer-Encoding", "chunked")
+            response.body.value.map { Buffer.buffer(it) }.writeTo(this)
+        }
     }
 }
 
@@ -140,8 +147,8 @@ fun httpApi(
     f: HttpApi.(Router) -> Unit
 ): HttpApi =
     object : HttpApi(vertx, securityManager, tracer, registry) {
-        override fun Router.setup() {
-            f(this)
+        override fun setup(router: Router) {
+            f(router)
         }
     }
 

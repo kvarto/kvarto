@@ -1,20 +1,25 @@
 package io.kvarto.http.common
 
-import io.kvarto.http.client.impl.FlowBodyImpl
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
 
-interface Body {
-    fun length(): Int?
-
-    fun content(): Flow<ByteArray>
-
+sealed class Body {
     companion object {
-        val EMPTY: Body = FlowBodyImpl(0, emptyFlow())
+        val EMPTY: Body = EmptyBody
+
+        fun json(content: Any): Body = JsonBody(content)
 
         operator fun invoke(string: String): Body = invoke(string.toByteArray())
 
-        operator fun invoke(bytes: ByteArray): Body = FlowBodyImpl(bytes.size, flowOf(bytes))
+        operator fun invoke(bytes: ByteArray): Body = ByteArrayBody(bytes)
 
-        operator fun invoke(flow: Flow<ByteArray>): Body = FlowBodyImpl(null, flow)
+        operator fun invoke(flow: Flow<ByteArray>): Body = FlowBody(flow)
     }
 }
+
+internal data class FlowBody(val value: Flow<ByteArray>) : Body()
+
+internal data class ByteArrayBody(val value: ByteArray) : Body()
+
+internal class JsonBody(val value: Any) : Body()
+
+internal object EmptyBody : Body()

@@ -8,7 +8,7 @@ import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
-import kotlinx.coroutines.flow.Flow
+import io.vertx.core.json.Json
 import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
 import kotlin.coroutines.suspendCoroutine
@@ -19,7 +19,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
     override suspend fun send(request: HttpRequest): HttpResponse =
         retry(request.metadata.retry) {
             val vertxRequest = createVertxRequest(request)
-            val vertxResponse = sendRequest(vertxRequest, request.body.content())
+            val vertxResponse = sendRequest(vertxRequest, request.body)
 
             val status = HttpStatus.fromCode(vertxResponse.statusCode())
             val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
@@ -32,25 +32,43 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             response
         }
 
-    private suspend fun sendRequest(vertxRequest: HttpClientRequest, body: Flow<ByteArray>): HttpClientResponse {
-        body.map { Buffer.buffer(it) }.writeTo(vertxRequest)
-        return suspendCoroutine { cont ->
+    private suspend fun sendRequest(vertxRequest: HttpClientRequest, body: Body): HttpClientResponse =
+        when (body) {
+            is EmptyBody -> vertxRequest.send { end() }
+            is ByteArrayBody -> {
+                vertxRequest.putHeader("Content-Length", body.value.size.toString())
+                vertxRequest.send { end(Buffer.buffer(body.value)) }
+            }
+            is JsonBody -> {
+                val bytes = Json.mapper.writeValueAsBytes(body.value)
+                vertxRequest.putHeader("Content-Type", "application/json")
+                vertxRequest.putHeader("Content-Length", bytes.size.toString())
+                vertxRequest.send { end(Buffer.buffer(bytes)) }
+            }
+            is FlowBody -> {
+                vertxRequest.putHeader("Transfer-Encoding", "chunked")
+                body.value.map { Buffer.buffer(it) }.writeTo(vertxRequest)
+                vertxRequest.send { end() }
+            }
+        }
+
+    private suspend fun HttpClientRequest.send(f: HttpClientRequest.() -> Unit): HttpClientResponse =
+        suspendCoroutine { cont ->
             var waitingForResult = true
-            vertxRequest.handler {
+            handler {
                 if (waitingForResult) {
                     waitingForResult = false
                     cont.resumeWith(Result.success(it))
                 }
             }
-            vertxRequest.exceptionHandler {
+            exceptionHandler {
                 if (waitingForResult) {
                     waitingForResult = false
                     cont.resumeWith(Result.failure(it))
                 }
             }
-            vertxRequest.end()
+            f()
         }
-    }
 
     private suspend fun createVertxRequest(request: HttpRequest): HttpClientRequest {
         val options = RequestOptions().apply {
@@ -64,12 +82,6 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
                 if (name !in request.headers) {
                     addHeader(name, value)
                 }
-            }
-            val length = request.body.length()
-            if (length != null) {
-                addHeader("Content-Length", length.toString())
-            } else {
-                addHeader("Transfer-Encoding", "chunked")
             }
             uri = URIBuilder(request.url.toURI()).apply {
                 for ((name, value) in request.params.values()) {

@@ -1,7 +1,8 @@
 package io.kvarto.utils
 
-import io.kvarto.http.common.Body
+import io.kvarto.http.common.*
 import io.vertx.core.Vertx
+import io.vertx.core.json.Json
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
 import io.vertx.kotlin.coroutines.toChannel
@@ -15,13 +16,19 @@ import kotlin.coroutines.suspendCoroutine
 
 fun URL.resolve(path: String): URL = toURI().resolve(path).toURL()
 
-suspend fun Body.asBytes(): ByteArray {
-    val buf = MappedByteBuffer.allocate(length() ?: 4096)
-    content().collect {
-        buf.put(it)
+suspend fun Body.asBytes(): ByteArray =
+    when (this) {
+        is EmptyBody -> byteArrayOf()
+        is ByteArrayBody -> value
+        is JsonBody -> Json.mapper.writeValueAsBytes(value)
+        is FlowBody -> {
+            val buf = MappedByteBuffer.allocate(4096)
+            value.collect {
+                buf.put(it)
+            }
+            buf.array().copyOf(buf.position())
+        }
     }
-    return buf.array().copyOf(buf.position())
-}
 
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)
 

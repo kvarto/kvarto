@@ -7,7 +7,7 @@ import io.opentracing.propagation.TextMapAdapter
 import io.vertx.core.Vertx
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.*
-import io.vertx.ext.web.handler.impl.BodyHandlerImpl
+import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.awaitResult
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -15,26 +15,22 @@ import kotlin.coroutines.coroutineContext
 
 suspend fun Vertx.startHttpServer(port: Int, vararg apis: HttpApi) {
     val router = Router.router(this)
-    apis.forEach {
-        with(it) {
-            router.setup()
-        }
-    }
+    apis.forEach { it.setup(router) }
     awaitResult<HttpServer> { createHttpServer().requestHandler(router).listen(port, it) }
 }
 
 fun Router.postWithBody(path: String): Route {
-    post(path).handler(BodyHandlerImpl())
+    post(path).handler(BodyHandler.create())
     return post(path)
 }
 
 fun Router.putWithBody(path: String): Route {
-    put(path).handler(BodyHandlerImpl())
+    put(path).handler(BodyHandler.create())
     return put(path)
 }
 
 fun Router.patchWithBody(path: String): Route {
-    patch(path).handler(BodyHandlerImpl())
+    patch(path).handler(BodyHandler.create())
     return patch(path)
 }
 
@@ -44,6 +40,7 @@ fun RoutingContext.fail(status: HttpStatus) {
 
 class OperationId(val value: String) : CoroutineContext.Element {
     override val key = Key
+
     object Key : CoroutineContext.Key<OperationId>
 }
 
@@ -53,6 +50,7 @@ suspend fun operationId(): String? = coroutineContext[OperationId.Key]?.value
 
 class CurrentSpan(val value: Span) : CoroutineContext.Element {
     override val key = Key
+
     object Key : CoroutineContext.Key<CurrentSpan>
 }
 
@@ -61,10 +59,12 @@ suspend fun currentSpan(): Span? = coroutineContext[CurrentSpan.Key]?.value
 
 class CorrelationHeader(val name: String, val value: String) : CoroutineContext.Element {
     override val key = Key
+
     object Key : CoroutineContext.Key<CorrelationHeader>
 }
 
-suspend fun correlationHeader(): Pair<String, String>? = coroutineContext[CorrelationHeader.Key]?.let { it.name to it.value }
+suspend fun correlationHeader(): Pair<String, String>? =
+    coroutineContext[CorrelationHeader.Key]?.let { it.name to it.value }
 
 val CTX_PARAM_OPERATION_ID = "io.kvarto.OperationId"
 
