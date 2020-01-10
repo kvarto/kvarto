@@ -5,7 +5,7 @@ val vertxVersion = "3.8.4"
 val coroutinesVersion = "1.3.3"
 
 plugins {
-    kotlin("jvm") version "1.3.60"
+    kotlin("jvm") version "1.3.61"
 }
 
 group = "io.kvarto"
@@ -16,6 +16,8 @@ java.sourceCompatibility = JavaVersion.VERSION_1_8
 
 repositories {
     mavenCentral()
+    jcenter()
+    google()
     maven("https://oss.jfrog.org/artifactory/oss-snapshot-local")
 }
 dependencies {
@@ -35,6 +37,7 @@ dependencies {
     implementation("io.github.classgraph:classgraph:4.8.58")
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.5.2")
     testImplementation("org.assertj:assertj-core:3.14.0")
 }
 
