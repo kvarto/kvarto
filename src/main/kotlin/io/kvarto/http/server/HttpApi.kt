@@ -16,7 +16,6 @@ import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.net.ServerSocket
 import java.net.URL
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.EmptyCoroutineContext
@@ -157,10 +156,3 @@ fun response(body: String): HttpResponse = HttpResponse(body = Body(body))
 fun HttpResponse.addHeader(name: String, value: String) = copy(headers = headers.add(name, value))
 
 fun HttpResponse.withStatus(status: HttpStatus) = copy(status = status)
-
-fun getFreePort(): Int =
-    ServerSocket(0).let {
-        val port = it.localPort
-        it.close()
-        port
-    }

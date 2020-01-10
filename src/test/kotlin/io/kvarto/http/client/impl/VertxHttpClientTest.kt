@@ -21,16 +21,30 @@ internal class VertxHttpClientTest {
             it.errorHandler(HttpStatus.INTERNAL_SERVER_ERROR.code) { ctx ->
                 ctx.failure().printStackTrace()
             }
-            it.get("/").handle { req -> response("hello ${req.parameters["name"]}") }
+            it.get("/").handle { req -> response("get ${req.parameters["name"]}") }
+            it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
+            it.patch("/").handle { req -> response("path ${req.headers["header1"]}") }
         }
         vertx.startHttpServer(port, api)
         println("server started")
 
         val client = HttpClient.create(vertx)
-        val req = HttpRequest(URL("http://localhost:$port")).addParameter("name", "kvarto")
-        val response = client.send(req)
+        val req = HttpRequest(URL("http://localhost:$port"))
 
-        assertEquals(HttpStatus.OK, response.status)
-        assertEquals("hello kvarto", response.body.asString())
+        run {
+            val response = client.send(req.addParameter("name", "kvarto"))
+            assertEquals(HttpStatus.OK, response.status)
+            assertEquals("get kvarto", response.body.asString())
+        }
+        run {
+            val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body("kotlin")))
+            assertEquals(HttpStatus.ACCEPTED, response.status)
+            assertEquals("post kotlin", response.body.asString())
+        }
+        run {
+            val response = client.send(req.withMethod(HttpMethod.PATCH).addHeader("header1", "value1"))
+            assertEquals(HttpStatus.OK, response.status)
+            assertEquals("patch value1", response.body.asString())
+        }
     }
 }

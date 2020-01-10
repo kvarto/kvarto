@@ -2,6 +2,7 @@ package io.kvarto.http.common
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.net.ServerSocket
 import kotlin.test.DefaultAsserter.fail
 
 
@@ -22,3 +23,9 @@ inline fun <reified T: Throwable> assertThrows(f: () -> Unit): T {
 }
 
 object TheDamnTable : Exception("(╯°□°)╯︵ ┻━┻")
+
+fun getFreePort(): Int =
+    ServerSocket(0).run {
+        close()
+        localPort
+    }
