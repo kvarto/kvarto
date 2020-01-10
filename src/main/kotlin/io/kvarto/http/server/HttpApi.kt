@@ -10,7 +10,7 @@ import io.opentracing.tag.Tags
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServerResponse
-import io.vertx.core.json.Json
+import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.ext.web.*
 import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -50,7 +50,7 @@ abstract class HttpApi(
     fun Route.handle(requestHandler: suspend (HttpRequest) -> HttpResponse): Route = handler { ctx ->
         createScope(ctx).launch {
             try {
-                val response = requestHandler(ctx.toHttpRequest(vertx))
+                val response = requestHandler(ctx.toHttpRequest())
                 ctx.response().end(response)
             } catch (e: Exception) {
                 ctx.fail(e)
@@ -105,7 +105,7 @@ private fun Tracer.handleTracing(ctx: RoutingContext, operationId: String) {
     }
 }
 
-private fun RoutingContext.toHttpRequest(vertx: Vertx): HttpRequest {
+private fun RoutingContext.toHttpRequest(): HttpRequest {
     val req = request()
     val method = HttpMethod.valueOf(req.method().name)
     val headers = req.headers().toStringMultiMap()
@@ -117,7 +117,7 @@ private fun RoutingContext.toHttpRequest(vertx: Vertx): HttpRequest {
 
 private suspend fun HttpServerResponse.end(response: HttpResponse) {
     statusCode = response.status.code
-    response.headers.values().forEach { (name, value) ->
+    response.headers.entries().forEach { (name, value) ->
         putHeader(name, value)
     }
     return when (response.body) {
@@ -127,7 +127,7 @@ private suspend fun HttpServerResponse.end(response: HttpResponse) {
             end(Buffer.buffer(response.body.value))
         }
         is JsonBody -> {
-            val bytes = Json.mapper.writeValueAsBytes(response.body.value)
+            val bytes = DatabindCodec.mapper().writeValueAsBytes(response.body.value)
             putHeader("Content-Type", "application/json")
             putHeader("Content-Length", bytes.size.toString())
             end(Buffer.buffer(bytes))

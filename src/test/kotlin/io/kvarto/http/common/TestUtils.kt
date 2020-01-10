@@ -5,7 +5,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.DefaultAsserter.fail
 
 
-fun testBlocking(f: suspend () -> Unit) = runBlocking<Unit> {
+fun testBlocking(f: suspend () -> Unit) = runBlocking {
     withTimeout(20_000) { f() }
 }
 

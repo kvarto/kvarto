@@ -8,7 +8,7 @@ data class HttpRequest(
     val url: URL,
     val method: HttpMethod = HttpMethod.GET,
     val headers: StringMultiMap = StringMultiMap.EMPTY,
-    val params: StringMultiMap = StringMultiMap.EMPTY,
+    val parameters: StringMultiMap = StringMultiMap.EMPTY,
     val body: Body = Body.EMPTY,
     val metadata: RequestMetadata = RequestMetadata.EMPTY
 ) {
@@ -16,7 +16,7 @@ data class HttpRequest(
 
     fun withMethod(method: HttpMethod) = copy(method = method)
 
-    fun addParameter(name: String, value: String) = copy(params = params.add(name, value))
+    fun addParameter(name: String, value: String) = copy(parameters = parameters.add(name, value))
 
     fun addHeader(name: String, value: String) = copy(headers = headers.add(name, value))
 

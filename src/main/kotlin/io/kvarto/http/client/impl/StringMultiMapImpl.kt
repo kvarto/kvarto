@@ -4,15 +4,13 @@ import io.kvarto.http.common.StringMultiMap
 import io.vertx.core.MultiMap
 
 
-internal class StringMultiMapImpl(
-    private val impl: MultiMap = MultiMap.caseInsensitiveMultiMap()
-): StringMultiMap {
+internal class StringMultiMapImpl(private val impl: MultiMap = MultiMap.caseInsensitiveMultiMap()): StringMultiMap {
 
     override fun get(name: String): String? = impl[name]
 
     override fun getAll(name: String): List<String> = impl.getAll(name)
 
-    override fun values(): List<Pair<String, String>> = impl.map { (name, value) -> name to value }
+    override fun entries(): List<Pair<String, String>> = impl.map { (name, value) -> name to value }
 
     override fun add(name: String, value: String): StringMultiMap =
         StringMultiMapImpl().also {
@@ -20,7 +18,7 @@ internal class StringMultiMapImpl(
             it.impl.add(name, value)
         }
 
-    override fun addAll(params: List<Pair<String, String>>): StringMultiMap =
+    override fun plus(params: List<Pair<String, String>>): StringMultiMap =
         StringMultiMapImpl().also {
             it.impl.addAll(impl)
             for ((name, value) in params) {
@@ -30,7 +28,7 @@ internal class StringMultiMapImpl(
 
     override fun toString(): String = buildString {
         append('{')
-        val values = values()
+        val values = entries()
         values.forEachIndexed { i, (name, value) ->
             append('\"')
             append(name)

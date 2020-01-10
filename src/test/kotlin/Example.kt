@@ -29,7 +29,7 @@ private suspend fun testServer(vertx: Vertx) {
         override fun setup(router: Router) {
             router.setCorrelationHeader("X-Flow-ID")
             router.get("/").operationId("op1").secure(AuthScope("my_scope.read")).handle { req ->
-                HttpResponse(body = Body("hello ${req.params["name"]}"))
+                HttpResponse(body = Body("hello ${req.parameters["name"]}"))
             }
         }
     }

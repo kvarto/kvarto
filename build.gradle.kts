@@ -33,9 +33,11 @@ dependencies {
     implementation("org.apache.httpcomponents:httpclient:4.5.10")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7") { exclude("org.jetbrains.kotlin") }
     implementation("io.github.classgraph:classgraph:4.8.58")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.5.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.5.2")
     testImplementation("org.assertj:assertj-core:3.14.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion")
 }
 
 tasks.withType<Test> {

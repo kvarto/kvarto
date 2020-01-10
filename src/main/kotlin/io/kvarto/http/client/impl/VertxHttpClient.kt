@@ -8,7 +8,7 @@ import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
-import io.vertx.core.json.Json
+import io.vertx.core.json.jackson.DatabindCodec
 import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
 import kotlin.coroutines.suspendCoroutine
@@ -40,7 +40,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
                 vertxRequest.send { end(Buffer.buffer(body.value)) }
             }
             is JsonBody -> {
-                val bytes = Json.mapper.writeValueAsBytes(body.value)
+                val bytes = DatabindCodec.mapper().writeValueAsBytes(body.value)
                 vertxRequest.putHeader("Content-Type", "application/json")
                 vertxRequest.putHeader("Content-Length", bytes.size.toString())
                 vertxRequest.send { end(Buffer.buffer(bytes)) }
@@ -75,7 +75,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             host = request.url.host
             port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
             isSsl = request.url.protocol == "https"
-            request.headers.values().forEach { (name, value) ->
+            request.headers.entries().forEach { (name, value) ->
                 addHeader(name, value)
             }
             correlationHeader()?.let { (name, value) ->
@@ -84,7 +84,7 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
                 }
             }
             uri = URIBuilder(request.url.toURI()).apply {
-                for ((name, value) in request.params.values()) {
+                for ((name, value) in request.parameters.entries()) {
                     addParameter(name, value)
                 }
             }.build().toASCIIString()

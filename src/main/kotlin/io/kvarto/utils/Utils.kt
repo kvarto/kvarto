@@ -2,7 +2,7 @@ package io.kvarto.utils
 
 import io.kvarto.http.common.*
 import io.vertx.core.Vertx
-import io.vertx.core.json.Json
+import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
 import io.vertx.kotlin.coroutines.toChannel
@@ -20,7 +20,7 @@ suspend fun Body.asBytes(): ByteArray =
     when (this) {
         is EmptyBody -> byteArrayOf()
         is ByteArrayBody -> value
-        is JsonBody -> Json.mapper.writeValueAsBytes(value)
+        is JsonBody -> DatabindCodec.mapper().writeValueAsBytes(value)
         is FlowBody -> {
             val buf = MappedByteBuffer.allocate(4096)
             value.collect {
@@ -28,6 +28,14 @@ suspend fun Body.asBytes(): ByteArray =
             }
             buf.array().copyOf(buf.position())
         }
+    }
+
+fun Body.asFlow(): Flow<ByteArray> =
+    when (this) {
+        is EmptyBody -> emptyFlow()
+        is ByteArrayBody -> flowOf(value)
+        is JsonBody -> flowOf(DatabindCodec.mapper().writeValueAsBytes(value))
+        is FlowBody -> value
     }
 
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)

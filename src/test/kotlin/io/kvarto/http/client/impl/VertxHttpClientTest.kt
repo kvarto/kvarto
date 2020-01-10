@@ -21,16 +21,16 @@ internal class VertxHttpClientTest {
             it.errorHandler(HttpStatus.INTERNAL_SERVER_ERROR.code) { ctx ->
                 ctx.failure().printStackTrace()
             }
-            it.get("/").handle { req -> response("hello") }
+            it.get("/").handle { req -> response("hello ${req.parameters["name"]}") }
         }
         vertx.startHttpServer(port, api)
         println("server started")
 
         val client = HttpClient.create(vertx)
-        val req = HttpRequest(URL("http://localhost:$port"))
+        val req = HttpRequest(URL("http://localhost:$port")).addParameter("name", "kvarto")
         val response = client.send(req)
 
         assertEquals(HttpStatus.OK, response.status)
-        assertEquals("hello", response.body.asString())
+        assertEquals("hello kvarto", response.body.asString())
     }
 }

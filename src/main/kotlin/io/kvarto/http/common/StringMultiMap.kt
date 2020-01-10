@@ -7,24 +7,24 @@ interface StringMultiMap {
 
     fun getAll(name: String): List<String>
 
-    fun values(): List<Pair<String, String>>
+    fun entries(): List<Pair<String, String>>
 
     fun add(name: String, value: String): StringMultiMap
 
-    fun addAll(params: List<Pair<String, String>>): StringMultiMap
+    operator fun plus(params: List<Pair<String, String>>): StringMultiMap
 
     companion object {
         val EMPTY: StringMultiMap = StringMultiMapImpl()
 
-        fun of(values: List<Pair<String, String>>) = EMPTY.addAll(values)
+        fun of(values: List<Pair<String, String>>) = EMPTY + values
     }
 }
 
-fun Map<String, String>.toMultiMap(): StringMultiMap = StringMultiMap.EMPTY.addAll(this)
+fun Map<String, String>.toMultiMap(): StringMultiMap = StringMultiMap.EMPTY + this
 
-fun StringMultiMap.addAll(params: Map<String, String>): StringMultiMap = addAll(values())
+operator fun StringMultiMap.plus(other: Map<String, String>): StringMultiMap = plus(other.toList())
 
-fun StringMultiMap.addAll(params: StringMultiMap): StringMultiMap = addAll(values())
+operator fun StringMultiMap.plus(other: StringMultiMap): StringMultiMap = plus(other.entries())
 
 operator fun StringMultiMap.contains(key: String): Boolean = get(key) != null
 
