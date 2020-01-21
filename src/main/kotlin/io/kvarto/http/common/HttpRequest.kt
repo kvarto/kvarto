@@ -23,5 +23,8 @@ data class HttpRequest(
     fun withBody(body: Body) = copy(body = body)
 
     fun withMetadata(metadata: RequestMetadata) = copy(metadata = metadata)
+
+    fun withSuccessStatuses(successStatuses: Set<HttpStatus>) =
+        copy(metadata = metadata.copy(successStatuses = successStatuses))
 }
 

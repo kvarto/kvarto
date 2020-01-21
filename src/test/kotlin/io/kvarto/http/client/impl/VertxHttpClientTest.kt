@@ -5,33 +5,53 @@ import io.kvarto.http.common.*
 import io.kvarto.http.server.*
 import io.kvarto.utils.asString
 import io.vertx.core.Vertx
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.*
 import java.net.URL
 import kotlin.test.assertEquals
 
-
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class VertxHttpClientTest {
     val vertx = Vertx.vertx()
     val port = getFreePort()
 
-    @Test
-    fun `get success`() = testBlocking {
-        println("starting server")
-        val api = httpApi(vertx) {
-            it.errorHandler(HttpStatus.INTERNAL_SERVER_ERROR.code) { ctx ->
-                ctx.failure().printStackTrace()
-            }
-            it.get("/").handle { req -> response("get ${req.parameters["name"]}") }
-            it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
-            it.patch("/").handle { req -> response("path ${req.headers["header1"]}") }
+    val client = HttpClient.create(vertx)
+    val req = HttpRequest(URL("http://localhost:$port"))
+
+    val api = httpApi(vertx) {
+        it.errorHandler(HttpStatus.INTERNAL_SERVER_ERROR.code) { ctx ->
+            ctx.failure()?.printStackTrace()
+            ctx.response().setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR.code).end()
         }
+        it.get("/").handle { req -> response("get ${req.parameters["name"]}") }
+        it.get("/error").handle { HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR) }
+        it.get("/exception").handle { throw TheDamnTable }
+        it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
+        it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
+    }
+
+
+    @BeforeAll
+    fun setup() = testBlocking() {
         vertx.startHttpServer(port, api)
-        println("server started")
+    }
 
-        val client = HttpClient.create(vertx)
-        val req = HttpRequest(URL("http://localhost:$port"))
+    @Test
+    fun `GET server error`() = testBlocking {
+        val response = client.send(req.withPath("/error").withSuccessStatuses(ALL_STATUSES))
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.status)
+        assertEquals("", response.body.asString())
+    }
 
-        run {
+    @Test
+    fun `GET server exception`() = testBlocking {
+        val response = client.send(req.withPath("/exception").withSuccessStatuses(ALL_STATUSES))
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.status)
+        assertEquals("", response.body.asString())
+    }
+
+    @Test
+    fun `GET success`() = testBlocking {
+        repeat(2) {
             val response = client.send(req.addParameter("name", "kvarto"))
             assertEquals(HttpStatus.OK, response.status)
             assertEquals("get kvarto", response.body.asString())

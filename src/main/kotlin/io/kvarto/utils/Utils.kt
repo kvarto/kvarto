@@ -1,5 +1,6 @@
 package io.kvarto.utils
 
+import com.fasterxml.jackson.module.kotlin.readValue
 import io.kvarto.http.common.*
 import io.vertx.core.Vertx
 import io.vertx.core.json.jackson.DatabindCodec
@@ -34,9 +35,11 @@ fun Body.asFlow(): Flow<ByteArray> =
     when (this) {
         is EmptyBody -> emptyFlow()
         is ByteArrayBody -> flowOf(value)
-        is JsonBody -> flowOf(DatabindCodec.mapper().writeValueAsBytes(value))
+        is JsonBody -> flow { asBytes() }
         is FlowBody -> value
     }
+
+inline suspend fun <reified T> Body.parse(): T = DatabindCodec.mapper().readValue<T>(asBytes())
 
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)
 

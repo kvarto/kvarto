@@ -9,6 +9,7 @@ import io.opentracing.Tracer
 import io.opentracing.tag.Tags
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
+import io.vertx.core.http.HttpHeaders
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.ext.web.*
@@ -127,12 +128,12 @@ private suspend fun HttpServerResponse.end(response: HttpResponse) {
         }
         is JsonBody -> {
             val bytes = DatabindCodec.mapper().writeValueAsBytes(response.body.value)
-            putHeader("Content-Type", "application/json")
-            putHeader("Content-Length", bytes.size.toString())
+            putHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+            putHeader(HttpHeaders.CONTENT_LENGTH, bytes.size.toString())
             end(Buffer.buffer(bytes))
         }
         is FlowBody -> {
-            putHeader("Transfer-Encoding", "chunked")
+            isChunked = true
             response.body.value.map { Buffer.buffer(it) }.writeTo(this)
         }
     }

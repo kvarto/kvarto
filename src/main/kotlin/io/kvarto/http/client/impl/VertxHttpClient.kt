@@ -2,13 +2,15 @@ package io.kvarto.http.client.impl
 
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
-import io.kvarto.utils.toFlow
 import io.kvarto.utils.writeTo
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
 import io.vertx.core.json.jackson.DatabindCodec
+import io.vertx.core.streams.ReadStream
+import io.vertx.kotlin.coroutines.toChannel
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
 import kotlin.coroutines.suspendCoroutine
@@ -19,11 +21,18 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
     override suspend fun send(request: HttpRequest): HttpResponse =
         retry(request.metadata.retry) {
             val vertxRequest = createVertxRequest(request)
-            val vertxResponse = sendRequest(vertxRequest, request.body)
+            val responseFlow = (vertxRequest as ReadStream<HttpClientResponse>).toChannel(vertx)
+            vertxRequest.sendRequest(request.body)
+            val vertxResponse = responseFlow.receive()
+
+            val responseBodyFlow = vertxResponse.toChannel(vertx).consumeAsFlow().map { it.bytes }
+//            val responseBodyFlow = vertxResponse.toChannel(vertx).toList().asFlow().map { it.bytes }
 
             val status = HttpStatus.fromCode(vertxResponse.statusCode())
             val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
-            val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
+
+//            val body = awaitEvent<Buffer> { vertxResponse.bodyHandler(it) }
+//            val responseBodyFlow = flowOf(body.bytes)
 
             val response = HttpResponse(status, headers, Body(responseBodyFlow))
             if (response.status !in request.metadata.successStatuses) {
@@ -32,23 +41,23 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             response
         }
 
-    private suspend fun sendRequest(vertxRequest: HttpClientRequest, body: Body): HttpClientResponse =
+    private suspend fun HttpClientRequest.sendRequest(body: Body): Unit =
         when (body) {
-            is EmptyBody -> vertxRequest.send { end() }
+            is EmptyBody -> end()
             is ByteArrayBody -> {
-                vertxRequest.putHeader("Content-Length", body.value.size.toString())
-                vertxRequest.send { end(Buffer.buffer(body.value)) }
+                putHeader("Content-Length", body.value.size.toString())
+                end(Buffer.buffer(body.value))
             }
             is JsonBody -> {
                 val bytes = DatabindCodec.mapper().writeValueAsBytes(body.value)
-                vertxRequest.putHeader("Content-Type", "application/json")
-                vertxRequest.putHeader("Content-Length", bytes.size.toString())
-                vertxRequest.send { end(Buffer.buffer(bytes)) }
+                putHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+                putHeader(HttpHeaders.CONTENT_LENGTH, bytes.size.toString())
+                end(Buffer.buffer(bytes))
             }
             is FlowBody -> {
-                vertxRequest.putHeader("Transfer-Encoding", "chunked")
-                body.value.map { Buffer.buffer(it) }.writeTo(vertxRequest)
-                vertxRequest.send { end() }
+                isChunked = true
+                body.value.map { Buffer.buffer(it) }.writeTo(this)
+                end()
             }
         }
 
@@ -97,7 +106,10 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
 }
 
 
-private val DEFAULT_OPTIONS = HttpClientOptions()
+val DEFAULT_OPTIONS = HttpClientOptions().apply {
+    isTryUseCompression = true
+    maxPoolSize = 10
+}
 
 fun HttpClient.Companion.create(vertx: Vertx, options: HttpClientOptions = DEFAULT_OPTIONS): HttpClient =
     VertxHttpClient(vertx, options)
