@@ -2,84 +2,50 @@ package io.kvarto.http.client.impl
 
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
-import io.kvarto.utils.writeTo
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
-import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
-import io.vertx.core.json.jackson.DatabindCodec
+import io.vertx.core.http.RequestOptions
 import io.vertx.core.streams.ReadStream
-import io.vertx.kotlin.coroutines.toChannel
-import kotlinx.coroutines.flow.consumeAsFlow
+import io.vertx.ext.web.client.WebClient
+import io.vertx.ext.web.client.WebClientOptions
+import io.vertx.kotlin.ext.web.client.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.apache.http.client.utils.URIBuilder
-import kotlin.coroutines.suspendCoroutine
 
-internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : HttpClient {
-    val client = vertx.createHttpClient(options)
+typealias VxRequest = io.vertx.ext.web.client.HttpRequest<Buffer>
+typealias VxResponse = io.vertx.ext.web.client.HttpResponse<Buffer>
+
+internal class VertxHttpClient(val vertx: Vertx, options: WebClientOptions) : HttpClient {
+    val client = WebClient.create(vertx, options)
 
     override suspend fun send(request: HttpRequest): HttpResponse =
         retry(request.metadata.retry) {
             val vertxRequest = createVertxRequest(request)
-            val responseFlow = (vertxRequest as ReadStream<HttpClientResponse>).toChannel(vertx)
-            vertxRequest.sendRequest(request.body)
-            val vertxResponse = responseFlow.receive()
+            val vertxResponse = vertxRequest.sendRequest(request.body)
 
-            val responseBodyFlow = vertxResponse.toChannel(vertx).consumeAsFlow().map { it.bytes }
-//            val responseBodyFlow = vertxResponse.toChannel(vertx).toList().asFlow().map { it.bytes }
+            val responseBody = vertxResponse.body()?.bytes ?: byteArrayOf()
 
             val status = HttpStatus.fromCode(vertxResponse.statusCode())
             val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
 
-//            val body = awaitEvent<Buffer> { vertxResponse.bodyHandler(it) }
-//            val responseBodyFlow = flowOf(body.bytes)
-
-            val response = HttpResponse(status, headers, Body(responseBodyFlow))
+            val response = HttpResponse(status, headers, Body(responseBody))
             if (response.status !in request.metadata.successStatuses) {
                 throw UnexpectedHttpStatusException(response)
             }
             response
         }
 
-    private suspend fun HttpClientRequest.sendRequest(body: Body): Unit =
+    private suspend fun VxRequest.sendRequest(body: Body): VxResponse =
         when (body) {
-            is EmptyBody -> end()
-            is ByteArrayBody -> {
-                putHeader("Content-Length", body.value.size.toString())
-                end(Buffer.buffer(body.value))
-            }
-            is JsonBody -> {
-                val bytes = DatabindCodec.mapper().writeValueAsBytes(body.value)
-                putHeader(HttpHeaders.CONTENT_TYPE, "application/json")
-                putHeader(HttpHeaders.CONTENT_LENGTH, bytes.size.toString())
-                end(Buffer.buffer(bytes))
-            }
-            is FlowBody -> {
-                isChunked = true
-                body.value.map { Buffer.buffer(it) }.writeTo(this)
-                end()
-            }
+            is EmptyBody -> sendAwait()
+            is ByteArrayBody -> sendBufferAwait(Buffer.buffer(body.value))
+            is JsonBody -> sendJsonAwait(body.value)
+            is FlowBody -> sendStreamAwait(body.value.map { Buffer.buffer(it) }.toReadStream())
         }
 
-    private suspend fun HttpClientRequest.send(f: HttpClientRequest.() -> Unit): HttpClientResponse =
-        suspendCoroutine { cont ->
-            var waitingForResult = true
-            handler {
-                if (waitingForResult) {
-                    waitingForResult = false
-                    cont.resumeWith(Result.success(it))
-                }
-            }
-            exceptionHandler {
-                if (waitingForResult) {
-                    waitingForResult = false
-                    cont.resumeWith(Result.failure(it))
-                }
-            }
-            f()
-        }
-
-    private suspend fun createVertxRequest(request: HttpRequest): HttpClientRequest {
+    private suspend fun createVertxRequest(request: HttpRequest): VxRequest {
         val options = RequestOptions().apply {
             host = request.url.host
             port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
@@ -100,21 +66,25 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         }
         val method = HttpMethod.valueOf(request.method.name)
         return client.request(method, options).apply {
-            setTimeout(request.metadata.timeout.toMillis())
+            timeout(request.metadata.timeout.toMillis())
         }
     }
 }
 
+private fun <T> Flow<T>.toReadStream(): ReadStream<T> {
+    throw UnsupportedOperationException("not implemented")
+}
 
-val DEFAULT_OPTIONS = HttpClientOptions().apply {
+
+val DEFAULT_OPTIONS = WebClientOptions().apply {
     isTryUseCompression = true
     maxPoolSize = 10
 }
 
-fun HttpClient.Companion.create(vertx: Vertx, options: HttpClientOptions = DEFAULT_OPTIONS): HttpClient =
+fun HttpClient.Companion.create(vertx: Vertx, options: WebClientOptions = DEFAULT_OPTIONS): HttpClient =
     VertxHttpClient(vertx, options)
 
-class UnexpectedHttpStatusException(val response: HttpResponse):
+class UnexpectedHttpStatusException(val response: HttpResponse) :
     RuntimeException("Got ${response.status} ${response.status.code}")
 
 
