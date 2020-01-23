@@ -8,6 +8,8 @@ import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
 import io.vertx.kotlin.coroutines.toChannel
 import kotlinx.coroutines.flow.*
+import org.apache.http.client.utils.URIBuilder
+import java.net.URI
 import java.net.URL
 import java.nio.MappedByteBuffer
 import java.nio.charset.Charset
@@ -16,6 +18,14 @@ import kotlin.coroutines.suspendCoroutine
 
 
 fun URL.resolve(path: String): URL = toURI().resolve(path).toURL()
+
+fun buildUri(url: URL, parameters: StringMultiMap): URI {
+    val builder = URIBuilder(url.toURI())
+    for ((name, value) in parameters.entries()) {
+        builder.addParameter(name, value)
+    }
+    return builder.build()
+}
 
 suspend fun Body.asBytes(): ByteArray =
     when (this) {

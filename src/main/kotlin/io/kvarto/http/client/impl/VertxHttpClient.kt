@@ -2,6 +2,7 @@ package io.kvarto.http.client.impl
 
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
+import io.kvarto.utils.buildUri
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpMethod
@@ -12,7 +13,6 @@ import io.vertx.ext.web.client.WebClientOptions
 import io.vertx.kotlin.ext.web.client.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import org.apache.http.client.utils.URIBuilder
 
 typealias VxRequest = io.vertx.ext.web.client.HttpRequest<Buffer>
 typealias VxResponse = io.vertx.ext.web.client.HttpResponse<Buffer>
@@ -50,23 +50,19 @@ internal class VertxHttpClient(val vertx: Vertx, options: WebClientOptions) : Ht
             host = request.url.host
             port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
             isSsl = request.url.protocol == "https"
-            request.headers.entries().forEach { (name, value) ->
-                addHeader(name, value)
-            }
-            correlationHeader()?.let { (name, value) ->
-                if (name !in request.headers) {
-                    addHeader(name, value)
-                }
-            }
-            uri = URIBuilder(request.url.toURI()).apply {
-                for ((name, value) in request.parameters.entries()) {
-                    addParameter(name, value)
-                }
-            }.build().toASCIIString()
+            uri = buildUri(request.url, request.parameters).toASCIIString()
         }
         val method = HttpMethod.valueOf(request.method.name)
         return client.request(method, options).apply {
             timeout(request.metadata.timeout.toMillis())
+            request.headers.entries().forEach { (name, value) ->
+                putHeader(name, value)
+            }
+            correlationHeader()?.let { (name, value) ->
+                if (name !in request.headers) {
+                    putHeader(name, value)
+                }
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ package io.kvarto.http.server
 
 import io.kvarto.http.client.impl.toStringMultiMap
 import io.kvarto.http.common.*
+import io.kvarto.utils.toFlow
 import io.kvarto.utils.writeTo
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
@@ -58,6 +59,15 @@ abstract class HttpApi(
         }
     }
 
+    private fun RoutingContext.toHttpRequest(): HttpRequest {
+        val req = request()
+        val method = HttpMethod.valueOf(req.method().name)
+        val headers = req.headers().toStringMultiMap()
+        val params = req.params().toStringMultiMap()
+        val body = Body(req.toFlow(vertx).map { it.bytes })
+        return HttpRequest(URL(req.absoluteURI()), method, headers, params, body)
+    }
+
     private fun SecurityManager.handleSecurity(ctx: RoutingContext, authScope: AuthScope) {
         createScope(ctx).launch {
             try {
@@ -98,21 +108,11 @@ private fun Tracer.handleTracing(ctx: RoutingContext, operationId: String) {
     val span = buildSpan(operationId)
         .withTag(Tags.SPAN_KIND, Tags.SPAN_KIND_SERVER)
         .asChildOf(context)
-        .start() //add more params
+        .start() //TODO add more params
     ctx.put(CTX_PARAM_SPAN, CurrentSpan(span))
     ctx.addBodyEndHandler {
         span.finish()
     }
-}
-
-private fun RoutingContext.toHttpRequest(): HttpRequest {
-    val req = request()
-    val method = HttpMethod.valueOf(req.method().name)
-    val headers = req.headers().toStringMultiMap()
-    val params = req.params().toStringMultiMap()
-//    val body = req.toFlow(vertx).map { it.bytes }
-    val body = if (body != null) Body(body.bytes) else Body.EMPTY // TODO: implement request body streaming
-    return HttpRequest(URL(req.absoluteURI()), method, headers, params, body)
 }
 
 private suspend fun HttpServerResponse.end(response: HttpResponse) {

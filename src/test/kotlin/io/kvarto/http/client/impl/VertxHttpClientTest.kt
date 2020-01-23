@@ -56,15 +56,19 @@ internal class VertxHttpClientTest {
             assertEquals(HttpStatus.OK, response.status)
             assertEquals("get kvarto", response.body.asString())
         }
-        run {
-            val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body("kotlin")))
-            assertEquals(HttpStatus.ACCEPTED, response.status)
-            assertEquals("post kotlin", response.body.asString())
-        }
-        run {
-            val response = client.send(req.withMethod(HttpMethod.PATCH).addHeader("header1", "value1"))
-            assertEquals(HttpStatus.OK, response.status)
-            assertEquals("patch value1", response.body.asString())
-        }
+    }
+
+    @Test
+    fun `POST with body success`() = testBlocking {
+        val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body("kotlin")))
+        assertEquals(HttpStatus.ACCEPTED, response.status)
+        assertEquals("post kotlin", response.body.asString())
+    }
+
+    @Test
+    fun `PATCH with header success`() = testBlocking {
+        val response = client.send(req.withMethod(HttpMethod.PATCH).addHeader("header1", "value1"))
+        assertEquals(HttpStatus.OK, response.status)
+        assertEquals("patch value1", response.body.asString())
     }
 }
