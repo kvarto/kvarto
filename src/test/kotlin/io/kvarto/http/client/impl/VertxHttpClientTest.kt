@@ -5,6 +5,8 @@ import io.kvarto.http.common.*
 import io.kvarto.http.server.*
 import io.kvarto.utils.asString
 import io.vertx.core.Vertx
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import org.junit.jupiter.api.*
 import java.net.URL
 import kotlin.test.assertEquals
@@ -29,10 +31,11 @@ internal class VertxHttpClientTest {
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
     }
 
-
     @BeforeAll
     fun setup() = testBlocking() {
+        println("starting")
         vertx.startHttpServer(port, api)
+        println("server started")
     }
 
     @Test
@@ -70,5 +73,18 @@ internal class VertxHttpClientTest {
         val response = client.send(req.withMethod(HttpMethod.PATCH).addHeader("header1", "value1"))
         assertEquals(HttpStatus.OK, response.status)
         assertEquals("patch value1", response.body.asString())
+    }
+
+    @Test
+    fun `POST with stream body success`() = testBlocking {
+        val body = flow {
+            repeat(5) {
+                delay(100)
+                emit(byteArrayOf((it + 65).toByte()))
+            }
+        }
+        val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body(body)))
+        assertEquals(HttpStatus.ACCEPTED, response.status)
+        assertEquals("post ABCDE", response.body.asString())
     }
 }

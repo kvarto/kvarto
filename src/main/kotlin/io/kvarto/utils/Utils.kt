@@ -2,12 +2,19 @@ package io.kvarto.utils
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.kvarto.http.common.*
+import io.vertx.core.Handler
 import io.vertx.core.Vertx
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
+import io.vertx.core.streams.impl.InboundBuffer
+import io.vertx.kotlin.coroutines.dispatcher
 import io.vertx.kotlin.coroutines.toChannel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import org.apache.http.client.utils.URIBuilder
 import java.net.URI
 import java.net.URL
@@ -81,6 +88,93 @@ internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
         }
     }
 }
+
+internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> = FlowReadStream(this, vertx)
+internal fun <T> Flow<T>.toChannel(scope: CoroutineScope): ReceiveChannel<T> {
+    val ch = Channel<T>()
+    scope.launch {
+        val cause = runCatching { pumpTo(ch) }.exceptionOrNull()
+        ch.close(cause)
+    }
+    return ch
+}
+
+suspend fun <T> Flow<T>.pumpTo(ch: Channel<T>) {
+    collect { ch.send(it) }
+}
+
+internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) : ReadStream<T> {
+    private val scope = CoroutineScope(vertx.dispatcher())
+    private val ch = flow.toChannel(scope)
+    private val buffer = InboundBuffer<T>(vertx.orCreateContext)
+    private var exceptionHandler: Handler<Throwable>? = null
+    private var endHandler: Handler<Void>? = null
+
+    init {
+        pumpNextPortion()
+    }
+
+    private fun pumpNextPortion() {
+        scope.launch {
+            try {
+                var ended = false
+                while (buffer.isWritable) {
+                    val elem = ch.receiveOrNull()
+                    if (elem == null) {
+                        ended = true
+                        break
+                    }
+                    buffer.write(elem)
+                }
+                if (ended) {
+                    endHandler?.handle(null)
+                } else {
+                    buffer.drainHandler { pumpNextPortion() }
+                }
+            } catch (e: Throwable) {
+                exceptionHandler?.handle(e)
+            }
+        }
+    }
+
+    @Synchronized
+    override fun fetch(amount: Long): ReadStream<T> {
+        buffer.fetch(amount)
+        return this
+    }
+
+    @Synchronized
+    override fun pause(): ReadStream<T> {
+        buffer.pause()
+        return this
+    }
+
+    @Synchronized
+    override fun resume(): ReadStream<T> {
+        buffer.resume()
+        return this
+    }
+
+    @Synchronized
+    override fun handler(handler: Handler<T>?): ReadStream<T> {
+        buffer.handler(handler)
+        return this
+    }
+
+    @Synchronized
+    override fun exceptionHandler(handler: Handler<Throwable>?): ReadStream<T> {
+        buffer.exceptionHandler(handler)
+        exceptionHandler = handler
+        return this
+    }
+
+    @Synchronized
+    override fun endHandler(endHandler: Handler<Void>?): ReadStream<T> {
+        this.endHandler = endHandler
+        return this
+    }
+}
+
 
 val Int.millis: Duration get() = toLong().millis
 val Long.millis: Duration get() = Duration.ofMillis(this)
