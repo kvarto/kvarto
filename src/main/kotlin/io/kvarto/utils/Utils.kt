@@ -104,9 +104,10 @@ suspend fun <T> Flow<T>.pumpTo(ch: Channel<T>) {
 }
 
 internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) : ReadStream<T> {
-    private val scope = CoroutineScope(vertx.dispatcher())
+    private val context = vertx.orCreateContext
+    private val scope = CoroutineScope(context.dispatcher())
     private val ch = flow.toChannel(scope)
-    private val buffer = InboundBuffer<T>(vertx.orCreateContext)
+    private val buffer = InboundBuffer<T>(context)
     private var exceptionHandler: Handler<Throwable>? = null
     private var endHandler: Handler<Void>? = null
 
