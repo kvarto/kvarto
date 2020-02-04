@@ -8,21 +8,22 @@ import java.time.Duration
 import java.util.concurrent.TimeoutException
 
 
-suspend fun <T> retry(config: RetryConfig, f: suspend () -> T): T {
-    var lastThrowable: Throwable? = null
-    repeat(config.retries + 1) {
-        try {
-            return f()
-        } catch (e: Throwable) {
-            if (!config.isRetryable(e)) throw e else lastThrowable = e
-            delay(config.backoffStrategy.getDelayBeforeRetry(it + 1))
-        }
+suspend fun <T> retry(config: RetryConfig, f: suspend () -> T): T =
+    retryInner(0, config, f)
+
+private tailrec suspend fun <T> retryInner(tryNumber: Int, config: RetryConfig, f: suspend () -> T): T {
+    try {
+        return f()
+    } catch (e: Throwable) {
+        if (config.retries == 0 || !config.isRetryable(e)) throw e
+        if (tryNumber == config.retries) throw RetriesLimitReachedException("", e)
+        delay(config.backoffStrategy.getDelayBeforeRetry(tryNumber + 1))
     }
-    throw RetriesLimitReachedException("Reached", lastThrowable!!)
+    return retryInner(tryNumber + 1, config, f)
 }
 
 
-class RetriesLimitReachedException(message: String, cause: Throwable): RuntimeException(message, cause)
+class RetriesLimitReachedException(message: String, cause: Throwable) : RuntimeException(message, cause)
 
 fun isRetryable(t: Throwable): Boolean =
     when (t) {
@@ -47,6 +48,7 @@ interface BackoffStrategy {
 class ConstantBackoffStrategy(val timeout: Duration) : BackoffStrategy {
     override fun getDelayBeforeRetry(retryNumber: Int): Duration = timeout
 }
+
 class ExponentialBackoffStrategy(val timeout: Duration, val multiplier: Int) : BackoffStrategy {
     override fun getDelayBeforeRetry(retryNumber: Int): Duration =
         (timeout.toMillis() * Math.pow(multiplier.toDouble(), retryNumber.toDouble() - 1)).toLong().millis
@@ -54,7 +56,7 @@ class ExponentialBackoffStrategy(val timeout: Duration, val multiplier: Int) : B
 
 class FibonacciBackoffStrategy(val base: Duration) : BackoffStrategy {
     override fun getDelayBeforeRetry(retryNumber: Int): Duration = (base.toMillis() * fib(retryNumber)).millis
-    
+
     private fun fib(n: Int): Int {
         if (n < 2) return 1
         var a = 1

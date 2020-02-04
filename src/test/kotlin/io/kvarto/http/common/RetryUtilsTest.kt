@@ -92,9 +92,9 @@ class RetryUtilsTest {
     }
 
     @Test
-    fun `no retry does not retry`() = testBlocking {
+    fun `no retry does not retry and throws original exception`() = testBlocking {
         var count = 0
-        assertThrows<RetriesLimitReachedException> {
+        assertThrows<IOException> {
             retry<Unit>(NO_RETRY) {
                 count++
                 throw IOException("test")
