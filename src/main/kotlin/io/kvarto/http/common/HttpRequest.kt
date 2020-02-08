@@ -3,6 +3,7 @@ package io.kvarto.http.common
 import io.kvarto.http.client.RequestMetadata
 import io.kvarto.utils.resolve
 import java.net.URL
+import java.time.Duration
 
 data class HttpRequest(
     val url: URL,
@@ -26,5 +27,7 @@ data class HttpRequest(
 
     fun withSuccessStatuses(successStatuses: Set<HttpStatus>) =
         copy(metadata = metadata.copy(successStatuses = successStatuses))
+
+    fun withTimeout(timeout: Duration) = copy(metadata = metadata.copy(timeout = timeout))
 }
 

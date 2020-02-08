@@ -2,8 +2,7 @@ package io.kvarto.utils
 
 import com.fasterxml.jackson.module.kotlin.readValue
 import io.kvarto.http.common.*
-import io.vertx.core.Handler
-import io.vertx.core.Vertx
+import io.vertx.core.*
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
@@ -65,6 +64,7 @@ internal suspend fun <T> Flow<T>.writeTo(stream: WriteStream<T>) {
         stream.waitTillWritable()
         stream.write(elem)
     }
+    stream.end()
 }
 
 internal suspend fun <T> WriteStream<T>.waitTillWritable() {
@@ -89,27 +89,75 @@ internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
     }
 }
 
-internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> = FlowReadStream(this, vertx)
 internal fun <T> Flow<T>.toChannel(scope: CoroutineScope): ReceiveChannel<T> {
     val ch = Channel<T>()
     scope.launch {
-        val cause = runCatching { pumpTo(ch) }.exceptionOrNull()
+        val cause = runCatching {
+            collect {
+                ch.send(it)
+            }
+        }.exceptionOrNull()
         ch.close(cause)
     }
     return ch
 }
 
-suspend fun <T> Flow<T>.pumpTo(ch: Channel<T>) {
-    collect { ch.send(it) }
+internal class FlowWriteStream<T>(vertx: Vertx, capacity: Int) : WriteStream<T> {
+    private val context = vertx.orCreateContext
+    private val scope = CoroutineScope(context.dispatcher())
+    private val buffer = InboundBuffer<T>(context, capacity.toLong())
+    private var exceptionHandler: Handler<Throwable>? = null
+    private var endHandler: Handler<AsyncResult<Void>>? = null
+
+    override fun setWriteQueueMaxSize(maxSize: Int): WriteStream<T> {
+        return this
+    }
+
+    override fun writeQueueFull(): Boolean = !buffer.isWritable
+
+    override fun write(data: T): WriteStream<T> = write(data, null)
+
+    override fun write(data: T, handler: Handler<AsyncResult<Void>>?): WriteStream<T> {
+        buffer.write(data)
+        handler?.handle(Future.succeededFuture())
+        return this
+    }
+
+    override fun end() {
+        end(null as Handler<AsyncResult<Void>>?)
+    }
+
+    override fun end(handler: Handler<AsyncResult<Void>>?) {
+//        channel.close()
+        endHandler = handler
+    }
+
+    override fun drainHandler(handler: Handler<Void>?): WriteStream<T> {
+        buffer.drainHandler(handler)
+        return this
+    }
+
+    override fun exceptionHandler(handler: Handler<Throwable>?): WriteStream<T> {
+        exceptionHandler = handler
+        buffer.exceptionHandler(handler)
+        return this
+    }
+
+    fun asFlow(): Flow<T> {
+        TODO()
+//        buffer
+//        channel.consumeAsFlow()
+    }
 }
 
-internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) : ReadStream<T> {
+internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> = FlowReadStream(this, vertx).readStream
+
+internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) {
     private val context = vertx.orCreateContext
     private val scope = CoroutineScope(context.dispatcher())
     private val ch = flow.toChannel(scope)
     private val buffer = InboundBuffer<T>(context)
-    private var exceptionHandler: Handler<Throwable>? = null
-    private var endHandler: Handler<Void>? = null
+    internal val readStream = BufferReadStream(buffer)
 
     init {
         pumpNextPortion()
@@ -128,48 +176,47 @@ internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) : ReadStream<T> {
                     buffer.write(elem)
                 }
                 if (ended) {
-                    endHandler?.handle(null)
+                    readStream.endHandler?.handle(null)
                 } else {
                     buffer.drainHandler { pumpNextPortion() }
                 }
             } catch (e: Throwable) {
-                exceptionHandler?.handle(e)
+                readStream.exceptionHandler?.handle(e)
             }
         }
     }
+}
 
-    @Synchronized
+internal class BufferReadStream<T>(val buffer: InboundBuffer<T>): ReadStream<T> {
+    internal var endHandler: Handler<Void>? = null
+    internal var exceptionHandler: Handler<Throwable>? = null
+
     override fun fetch(amount: Long): ReadStream<T> {
         buffer.fetch(amount)
         return this
     }
 
-    @Synchronized
     override fun pause(): ReadStream<T> {
         buffer.pause()
         return this
     }
 
-    @Synchronized
     override fun resume(): ReadStream<T> {
         buffer.resume()
         return this
     }
 
-    @Synchronized
     override fun handler(handler: Handler<T>?): ReadStream<T> {
         buffer.handler(handler)
         return this
     }
 
-    @Synchronized
     override fun exceptionHandler(handler: Handler<Throwable>?): ReadStream<T> {
-        buffer.exceptionHandler(handler)
         exceptionHandler = handler
+        buffer.exceptionHandler(handler)
         return this
     }
 
-    @Synchronized
     override fun endHandler(endHandler: Handler<Void>?): ReadStream<T> {
         this.endHandler = endHandler
         return this

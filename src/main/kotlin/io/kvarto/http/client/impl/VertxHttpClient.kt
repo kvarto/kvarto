@@ -21,10 +21,12 @@ internal class VertxHttpClient(val vertx: Vertx, options: WebClientOptions) : Ht
 
     override suspend fun send(request: HttpRequest): HttpResponse =
         retry(request.metadata.retry) {
-            val vertxRequest = createVertxRequest(request)
+//            val writeStream = FlowWriteStream<Buffer>(vertx, 128)
+            val vertxRequest = createVertxRequest(request)//.`as`(BodyCodec.pipe(writeStream, true))
             val vertxResponse = vertxRequest.sendRequest(request.body)
 
             val responseBody = vertxResponse.body()?.bytes ?: byteArrayOf()
+//            val responseBody = writeStream.asFlow().map { it.bytes }
 
             val status = HttpStatus.fromCode(vertxResponse.statusCode())
             val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
@@ -75,7 +77,7 @@ val DEFAULT_OPTIONS = WebClientOptions().apply {
 fun HttpClient.Companion.create(vertx: Vertx, options: WebClientOptions = DEFAULT_OPTIONS): HttpClient =
     VertxHttpClient(vertx, options)
 
-class UnexpectedHttpStatusException(val response: HttpResponse) :
+class UnexpectedHttpStatusException(response: HttpResponse) :
     RuntimeException("Got ${response.status} ${response.status.code}")
 
 

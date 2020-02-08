@@ -6,6 +6,7 @@ import io.opentracing.propagation.Format
 import io.opentracing.propagation.TextMapAdapter
 import io.vertx.core.Vertx
 import io.vertx.core.http.HttpServer
+import io.vertx.core.http.HttpServerOptions
 import io.vertx.ext.web.*
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.awaitResult
@@ -16,7 +17,12 @@ import kotlin.coroutines.coroutineContext
 suspend fun Vertx.startHttpServer(port: Int, vararg apis: HttpApi) {
     val router = Router.router(this)
     apis.forEach { it.setup(router) }
-    awaitResult<HttpServer> { createHttpServer().requestHandler(router).listen(port, it) }
+    val options = HttpServerOptions()
+        .setCompressionSupported(true)
+        .setDecompressionSupported(true)
+        .setIdleTimeout(2)
+
+    awaitResult<HttpServer> { createHttpServer(options).requestHandler(router).listen(port, it) }
 }
 
 fun Router.postWithBody(path: String): Route {

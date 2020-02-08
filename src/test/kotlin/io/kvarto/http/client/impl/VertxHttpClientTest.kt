@@ -4,6 +4,7 @@ import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
 import io.kvarto.http.server.*
 import io.kvarto.utils.asString
+import io.kvarto.utils.seconds
 import io.vertx.core.Vertx
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
@@ -29,6 +30,20 @@ internal class VertxHttpClientTest {
         it.get("/exception").handle { throw TheDamnTable }
         it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
+        it.put("/stream").handle { req ->
+            println("server received request")
+//            val body = req.body.asFlow().onEach {
+//                println("server received: $it")
+//                it[0] = (it[0] + 10).toByte()
+//            }
+            val body = flow {
+                repeat(5) {
+                    emit(byteArrayOf((it + 75).toByte()))
+                    delay(50)
+                }
+            }
+            response("completed").withStatus(HttpStatus.ACCEPTED).copy(body = Body(body))
+        }
     }
 
     @BeforeAll
@@ -79,12 +94,35 @@ internal class VertxHttpClientTest {
     fun `POST with stream body success`() = testBlocking {
         val body = flow {
             repeat(5) {
-                delay(100)
+                delay(10)
                 emit(byteArrayOf((it + 65).toByte()))
             }
         }
         val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body(body)))
         assertEquals(HttpStatus.ACCEPTED, response.status)
         assertEquals("post ABCDE", response.body.asString())
+    }
+
+    @Test
+    fun `PUT with stream body success`() = testBlocking {
+        val body = flow {
+            repeat(5) {
+                delay(1000)
+                emit(byteArrayOf((it + 65).toByte()))
+            }
+        }
+        val request = req.withMethod(HttpMethod.PUT)
+            .withPath("/stream")
+//            .withBody(Body(body))
+            .withBody(Body("ABC"))
+            .withTimeout(10.seconds)
+        println("Sending")
+        val response = client.send(request)
+        println("Response: $response")
+        assertEquals(HttpStatus.ACCEPTED, response.status)
+//        response.body.asFlow().collect {
+//            println(it)
+//        }
+        println(response.body.asString())
     }
 }
