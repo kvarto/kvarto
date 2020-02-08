@@ -92,15 +92,17 @@ internal class VertxHttpClientTest {
 
     @Test
     fun `POST with stream body success`() = testBlocking {
-        val body = flow {
-            repeat(5) {
-                delay(10)
-                emit(byteArrayOf((it + 65).toByte()))
+        repeat(10) {
+            val body = flow {
+                repeat(5) {
+                    delay(10)
+                    emit(byteArrayOf((it + 65).toByte()))
+                }
             }
+            val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body(body)))
+            assertEquals(HttpStatus.ACCEPTED, response.status)
+            assertEquals("post ABCDE", response.body.asString())
         }
-        val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body(body)))
-        assertEquals(HttpStatus.ACCEPTED, response.status)
-        assertEquals("post ABCDE", response.body.asString())
     }
 
     @Test

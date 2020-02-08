@@ -150,25 +150,19 @@ internal class FlowWriteStream<T>(vertx: Vertx, capacity: Int) : WriteStream<T> 
     }
 }
 
-internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> = FlowReadStream(this, vertx).readStream
+internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> {
+    val context = vertx.orCreateContext
+    val scope = CoroutineScope(context.dispatcher())
+    val channel = toChannel(scope)
+    val buffer = InboundBuffer<T>(context)
+    val readStream = BufferReadStream(buffer)
 
-internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) {
-    private val context = vertx.orCreateContext
-    private val scope = CoroutineScope(context.dispatcher())
-    private val ch = flow.toChannel(scope)
-    private val buffer = InboundBuffer<T>(context)
-    internal val readStream = BufferReadStream(buffer)
-
-    init {
-        pumpNextPortion()
-    }
-
-    private fun pumpNextPortion() {
+    fun pumpNextPortion() {
         scope.launch {
             try {
                 var ended = false
                 while (buffer.isWritable) {
-                    val elem = ch.receiveOrNull()
+                    val elem = channel.receiveOrNull()
                     if (elem == null) {
                         ended = true
                         break
@@ -185,6 +179,8 @@ internal class FlowReadStream<T>(flow: Flow<T>, vertx: Vertx) {
             }
         }
     }
+    pumpNextPortion()
+    return readStream
 }
 
 internal class BufferReadStream<T>(val buffer: InboundBuffer<T>): ReadStream<T> {
