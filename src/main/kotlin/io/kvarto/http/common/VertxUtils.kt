@@ -14,14 +14,13 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 
-suspend fun Vertx.startHttpServer(port: Int, vararg apis: HttpApi) {
+suspend fun Vertx.startHttpServer(
+    port: Int,
+    vararg apis: HttpApi,
+    options: HttpServerOptions = DEFAULT_SERVER_OPTIONS
+) {
     val router = Router.router(this)
     apis.forEach { it.setup(router) }
-    val options = HttpServerOptions()
-        .setCompressionSupported(true)
-        .setDecompressionSupported(true)
-        .setIdleTimeout(2)
-
     awaitResult<HttpServer> { createHttpServer(options).requestHandler(router).listen(port, it) }
 }
 
@@ -95,3 +94,8 @@ fun Router.setCorrelationHeader(name: String) {
         ctx.next()
     }
 }
+
+val DEFAULT_SERVER_OPTIONS = HttpServerOptions()
+    .setCompressionSupported(true)
+    .setDecompressionSupported(true)
+
