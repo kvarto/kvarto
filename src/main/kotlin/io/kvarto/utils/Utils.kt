@@ -6,21 +6,16 @@ import io.vertx.core.*
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
-import io.vertx.core.streams.impl.InboundBuffer
-import io.vertx.kotlin.coroutines.dispatcher
+import io.vertx.kotlin.core.streams.endAwait
 import io.vertx.kotlin.coroutines.toChannel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import org.apache.http.client.utils.URIBuilder
 import java.net.URI
 import java.net.URL
 import java.nio.MappedByteBuffer
 import java.nio.charset.Charset
 import java.time.Duration
-import kotlin.coroutines.suspendCoroutine
 
 
 fun URL.resolve(path: String): URL = toURI().resolve(path).toURL()
@@ -60,25 +55,25 @@ inline suspend fun <reified T> Body.parse(): T = DatabindCodec.mapper().readValu
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)
 
 internal suspend fun <T> Flow<T>.writeTo(stream: WriteStream<T>) {
-    collect { elem ->
-        stream.waitTillWritable()
-        stream.write(elem)
+    runCatching {
+        collect { elem ->
+            stream.waitTillWritable()
+            stream.write(elem)
+        }
     }
-    stream.end()
+    stream.endAwait()
 }
 
 internal suspend fun <T> WriteStream<T>.waitTillWritable() {
     if (writeQueueFull()) {
-        suspendCoroutine<Unit> { cont ->
-            drainHandler {
-                cont.resumeWith(Result.success(Unit))
-            }
-            exceptionHandler {
-                cont.resumeWith(Result.failure(it))
-            }
+        suspendCancellableCoroutine<Unit> { cont ->
+            drainHandler { cont.resumeWith(Result.success(Unit)) }
+            exceptionHandler { cont.resumeWith(Result.failure(it)) }
         }
     }
 }
+
+//internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> = toChannel(vertx).consumeAsFlow()
 
 internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
     val ch = toChannel(vertx)
@@ -89,135 +84,7 @@ internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
     }
 }
 
-internal fun <T> Flow<T>.toChannel(scope: CoroutineScope): ReceiveChannel<T> {
-    val ch = Channel<T>()
-    scope.launch {
-        val cause = runCatching {
-            collect {
-                ch.send(it)
-            }
-        }.exceptionOrNull()
-        ch.close(cause)
-    }
-    return ch
-}
-
-internal class FlowWriteStream<T>(vertx: Vertx, capacity: Int) : WriteStream<T> {
-    private val context = vertx.orCreateContext
-    private val scope = CoroutineScope(context.dispatcher())
-    private val buffer = InboundBuffer<T>(context, capacity.toLong())
-    private var exceptionHandler: Handler<Throwable>? = null
-    private var endHandler: Handler<AsyncResult<Void>>? = null
-
-    override fun setWriteQueueMaxSize(maxSize: Int): WriteStream<T> {
-        return this
-    }
-
-    override fun writeQueueFull(): Boolean = !buffer.isWritable
-
-    override fun write(data: T): WriteStream<T> = write(data, null)
-
-    override fun write(data: T, handler: Handler<AsyncResult<Void>>?): WriteStream<T> {
-        buffer.write(data)
-        handler?.handle(Future.succeededFuture())
-        return this
-    }
-
-    override fun end() {
-        end(null as Handler<AsyncResult<Void>>?)
-    }
-
-    override fun end(handler: Handler<AsyncResult<Void>>?) {
-//        channel.close()
-        endHandler = handler
-    }
-
-    override fun drainHandler(handler: Handler<Void>?): WriteStream<T> {
-        buffer.drainHandler(handler)
-        return this
-    }
-
-    override fun exceptionHandler(handler: Handler<Throwable>?): WriteStream<T> {
-        exceptionHandler = handler
-        buffer.exceptionHandler(handler)
-        return this
-    }
-
-    fun asFlow(): Flow<T> {
-        TODO()
-//        buffer
-//        channel.consumeAsFlow()
-    }
-}
-
-internal fun <T> Flow<T>.toReadStream(vertx: Vertx): ReadStream<T> {
-    val context = vertx.orCreateContext
-    val scope = CoroutineScope(context.dispatcher())
-    val channel = toChannel(scope)
-    val buffer = InboundBuffer<T>(context)
-    val readStream = BufferReadStream(buffer)
-
-    fun pumpNextPortion() {
-        scope.launch {
-            try {
-                var ended = false
-                while (buffer.isWritable) {
-                    val elem = channel.receiveOrNull()
-                    if (elem == null) {
-                        ended = true
-                        break
-                    }
-                    buffer.write(elem)
-                }
-                if (ended) {
-                    readStream.endHandler?.handle(null)
-                } else {
-                    buffer.drainHandler { pumpNextPortion() }
-                }
-            } catch (e: Throwable) {
-                readStream.exceptionHandler?.handle(e)
-            }
-        }
-    }
-    pumpNextPortion()
-    return readStream
-}
-
-internal class BufferReadStream<T>(val buffer: InboundBuffer<T>): ReadStream<T> {
-    internal var endHandler: Handler<Void>? = null
-    internal var exceptionHandler: Handler<Throwable>? = null
-
-    override fun fetch(amount: Long): ReadStream<T> {
-        buffer.fetch(amount)
-        return this
-    }
-
-    override fun pause(): ReadStream<T> {
-        buffer.pause()
-        return this
-    }
-
-    override fun resume(): ReadStream<T> {
-        buffer.resume()
-        return this
-    }
-
-    override fun handler(handler: Handler<T>?): ReadStream<T> {
-        buffer.handler(handler)
-        return this
-    }
-
-    override fun exceptionHandler(handler: Handler<Throwable>?): ReadStream<T> {
-        exceptionHandler = handler
-        buffer.exceptionHandler(handler)
-        return this
-    }
-
-    override fun endHandler(endHandler: Handler<Void>?): ReadStream<T> {
-        this.endHandler = endHandler
-        return this
-    }
-}
+internal suspend fun <T> Flow<T>.toReadStream(): ReadStream<T> = ReadWriteStream<T>().also { writeTo(it) }
 
 
 val Int.millis: Duration get() = toLong().millis
@@ -234,3 +101,78 @@ val Long.hours: Duration get() = Duration.ofHours(this)
 
 val Int.days: Duration get() = toLong().days
 val Long.days: Duration get() = Duration.ofDays(this)
+
+
+class ReadWriteStream<T> : ReadStream<T>, WriteStream<T> {
+    private var dataHandler: Handler<T>? = null
+    private var endHandler: Handler<Void>? = null
+    private var drainHandler: Handler<Void>? = null
+    private var demand = 0L
+
+    override fun handler(handler: Handler<T>?): ReadWriteStream<T> {
+        dataHandler = handler
+        return this
+    }
+
+    override fun pause(): ReadWriteStream<T> {
+        demand = 0
+        return this
+    }
+
+    override fun resume(): ReadWriteStream<T> {
+        demand = Long.MAX_VALUE
+        drainHandler?.handle(null)
+        return this
+    }
+
+    override fun write(data: T): ReadWriteStream<T> = write(data, null)
+
+    override fun write(data: T, handler: Handler<AsyncResult<Void>>?): ReadWriteStream<T> {
+        println("ReadWriteStream.write: $data dataHandler: $dataHandler")
+        dataHandler?.handle(data)
+        if (demand > 0) {
+            demand--
+        }
+        handler?.handle(Future.succeededFuture())
+        return this
+    }
+
+    override fun end() {
+        end(null as Handler<AsyncResult<Void>>?)
+    }
+
+    override fun end(handler: Handler<AsyncResult<Void>>?) {
+        endHandler?.handle(null)
+        handler?.handle(Future.succeededFuture())
+    }
+
+    override fun writeQueueFull(): Boolean {
+        return demand <= 0L
+    }
+
+    override fun endHandler(handler: Handler<Void>?): ReadWriteStream<T> {
+        endHandler = handler
+        return this
+    }
+
+    override fun drainHandler(handler: Handler<Void>?): ReadWriteStream<T> {
+        drainHandler = handler
+        return this
+    }
+
+    override fun setWriteQueueMaxSize(maxSize: Int): ReadWriteStream<T> = this
+
+    override fun exceptionHandler(handler: Handler<Throwable?>?): ReadWriteStream<T> = this
+
+    override fun fetch(amount: Long): ReadWriteStream<T> {
+        println("ReadWriteStream.fetch amount: $amount demand: $demand")
+        demand += amount
+        if (demand < 0) {
+            demand = Long.MAX_VALUE
+        }
+        if (demand > 0) {
+            drainHandler?.handle(null)
+        }
+        return this
+    }
+}

@@ -31,17 +31,20 @@ internal class VertxHttpClientTest {
         it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
         it.put("/stream").handle { req ->
-            println("server received request")
+            println("server received request $req")
 //            val body = req.body.asFlow().onEach {
 //                println("server received: $it")
 //                it[0] = (it[0] + 10).toByte()
 //            }
             val body = flow {
                 repeat(5) {
-                    emit(byteArrayOf((it + 75).toByte()))
+                    val value = (it + 75).toByte()
+                    println("server emitting value $value")
+                    emit(byteArrayOf(value))
                     delay(50)
                 }
             }
+            println("Sending response")
             response("completed").withStatus(HttpStatus.ACCEPTED).copy(body = Body(body))
         }
     }
@@ -107,20 +110,10 @@ internal class VertxHttpClientTest {
 
     @Test
     fun `PUT with stream body success`() = testBlocking {
-        val body = flow {
-            repeat(5) {
-                delay(1000)
-                emit(byteArrayOf((it + 65).toByte()))
-            }
-        }
-        val request = req.withMethod(HttpMethod.PUT)
-            .withPath("/stream")
-//            .withBody(Body(body))
-            .withBody(Body("ABC"))
-            .withTimeout(10.seconds)
-        println("Sending")
+        val request = req.withMethod(HttpMethod.PUT).withPath("/stream").withBody(Body("ABC")).withTimeout(10.seconds)
+        println("Sending request")
         val response = client.send(request)
-        println("Response: $response")
+        println("Client received response: $response")
         assertEquals(HttpStatus.ACCEPTED, response.status)
 //        response.body.asFlow().collect {
 //            println(it)
