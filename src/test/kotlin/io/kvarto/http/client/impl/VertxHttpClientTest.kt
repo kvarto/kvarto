@@ -6,11 +6,13 @@ import io.kvarto.http.server.*
 import io.kvarto.utils.asString
 import io.kvarto.utils.seconds
 import io.vertx.core.Vertx
+import io.vertx.core.VertxException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import org.junit.jupiter.api.*
 import java.net.URL
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class VertxHttpClientTest {
@@ -28,6 +30,7 @@ internal class VertxHttpClientTest {
         it.get("/").handle { req -> response("get ${req.parameters["name"]}") }
         it.get("/error").handle { HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR) }
         it.get("/exception").handle { throw TheDamnTable }
+        it.get("/close").handler { it.response().close() }
         it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
         it.put("/stream").handle { req ->
@@ -71,13 +74,21 @@ internal class VertxHttpClientTest {
     }
 
     @Test
+    fun `GET server close connection`() = testBlocking {
+        val e = assertFailsWith<VertxException> {
+            client.send(req.withPath("/close").withSuccessStatuses(ALL_STATUSES))
+        }
+        assertEquals("Connection was closed", e.message)
+    }
+
+    @Test
     fun `GET success`() = testBlocking {
         repeat(10) {
             println("try #${it + 1}")
             val response = client.send(req.addParameter("name", "kvarto"))
             assertEquals(HttpStatus.OK, response.status)
             assertEquals("get kvarto", response.body.asString())
-            delay(1000)
+//            delay(1000)
             client.send(req.addParameter("name", "kvarto"))
         }
     }
@@ -99,6 +110,7 @@ internal class VertxHttpClientTest {
         assertEquals("patch value1", response.body.asString())
     }
 
+    @Disabled
     @Test
     fun `POST with stream body success`() = testBlocking {
         repeat(10) {
@@ -115,6 +127,7 @@ internal class VertxHttpClientTest {
         }
     }
 
+    @Disabled
     @Test
     fun `PUT with stream body success`() = testBlocking {
         val request = req.withMethod(HttpMethod.PUT).withPath("/stream").withBody(Body("ABC")).withTimeout(10.seconds)

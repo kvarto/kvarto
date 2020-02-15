@@ -31,15 +31,24 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             }
             val method = HttpMethod.valueOf(request.method.name)
             val ch = Channel<HttpResponse>()
-            val vertxRequest = client.request(method, options) { vertxResponse ->
+            val vertxRequest = client.request(method, options)
+            vertxRequest.handler { vertxResponse ->
                 val status = HttpStatus.fromCode(vertxResponse.statusCode())
                 val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
                 val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
                 val response = HttpResponse(status, headers, Body(responseBodyFlow))
-                launch { ch.send(response) }
+                launch {
+                    ch.send(response)
+                    ch.close()
+                }
+            }
+            vertxRequest.exceptionHandler {
+                launch { ch.close(it) }
             }
             vertxRequest.setTimeout(request.metadata.timeout.toMillis())
-            vertxRequest.sendRequest(request.body)
+            vertxRequest.writeBody(request.body)
+            vertxRequest.end()
+
             val response = ch.receive()
             if (response.status !in request.metadata.successStatuses) {
                 throw UnexpectedHttpStatusException(response)
@@ -48,8 +57,9 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         }
     }
 
-    private suspend fun HttpClientRequest.sendRequest(body: Body) {
+    private suspend fun HttpClientRequest.writeBody(body: Body) {
         when (body) {
+            is EmptyBody -> Unit
             is ByteArrayBody -> {
                 putHeader("Content-Length", body.value.size.toString())
                 write(Buffer.buffer(body.value))
@@ -65,7 +75,6 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
                 body.value.map { Buffer.buffer(it) }.writeTo(this)
             }
         }
-        end()
     }
 }
 
