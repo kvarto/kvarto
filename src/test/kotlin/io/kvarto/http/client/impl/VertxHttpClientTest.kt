@@ -78,7 +78,7 @@ internal class VertxHttpClientTest {
             assertEquals(HttpStatus.OK, response.status)
             assertEquals("get kvarto", response.body.asString())
             delay(1000)
-//            client.send(req.addParameter("name", "kvarto"))
+            client.send(req.addParameter("name", "kvarto"))
         }
     }
 
