@@ -19,41 +19,47 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
 
     override suspend fun send(request: HttpRequest): HttpResponse = withContext(vertx.dispatcher()) {
         retry(request.metadata.retry) {
-            val options = RequestOptions().apply {
-                host = request.url.host
-                port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
-                isSsl = request.url.protocol == "https"
-                uri = buildUri(request.url, request.parameters).toASCIIString()
-                request.headers.entries().forEach { (name, value) ->
-                    addHeader(name, value)
-                }
-                correlationHeader()?.takeIf { it.first !in request.headers }?.let { addHeader(it.first, it.second) }
-            }
-            val method = HttpMethod.valueOf(request.method.name)
-            val ch = Channel<HttpResponse>()
-            val vertxRequest = client.request(method, options)
-            vertxRequest.handler { vertxResponse ->
+            val vxRequest = createVertxRequest(request)
+            val responseChannel = Channel<HttpResponse>()
+            vxRequest.handler { vertxResponse ->
                 val status = HttpStatus.fromCode(vertxResponse.statusCode())
                 val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
                 val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
                 val response = HttpResponse(status, headers, Body(responseBodyFlow))
                 launch {
-                    ch.send(response)
-                    ch.close()
+                    responseChannel.send(response)
+                    responseChannel.close()
                 }
             }
-            vertxRequest.exceptionHandler {
-                launch { ch.close(it) }
+            vxRequest.exceptionHandler {
+                launch { responseChannel.close(it) }
             }
-            vertxRequest.setTimeout(request.metadata.timeout.toMillis())
-            vertxRequest.writeBody(request.body)
-            vertxRequest.end()
+            vxRequest.setTimeout(request.metadata.timeout.toMillis())
+            vxRequest.writeBody(request.body)
+            vxRequest.end()
 
-            val response = ch.receive()
+            val response = responseChannel.receive()
             if (response.status !in request.metadata.successStatuses) {
                 throw UnexpectedHttpStatusException(response)
             }
             response
+        }
+    }
+
+    private suspend fun createVertxRequest(request: HttpRequest): HttpClientRequest {
+        val options = RequestOptions().apply {
+            host = request.url.host
+            port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
+            isSsl = request.url.protocol == "https"
+            uri = buildUri(request.url, request.parameters).toASCIIString()
+            request.headers.entries().forEach { (name, value) ->
+                addHeader(name, value)
+            }
+            correlationHeader()?.takeIf { it.first !in request.headers }?.let { addHeader(it.first, it.second) }
+        }
+        val method = HttpMethod.valueOf(request.method.name)
+        return client.request(method, options).apply {
+            setTimeout(request.metadata.timeout.toMillis())
         }
     }
 
