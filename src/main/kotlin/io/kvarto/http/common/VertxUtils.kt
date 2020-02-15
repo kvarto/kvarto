@@ -7,9 +7,11 @@ import io.opentracing.propagation.TextMapAdapter
 import io.vertx.core.Vertx
 import io.vertx.core.http.HttpServer
 import io.vertx.core.http.HttpServerOptions
+import io.vertx.core.streams.ReadStream
 import io.vertx.ext.web.*
 import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.awaitResult
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
@@ -99,3 +101,9 @@ val DEFAULT_SERVER_OPTIONS = HttpServerOptions()
     .setCompressionSupported(true)
     .setDecompressionSupported(true)
 
+
+suspend fun <T> ReadStream<T>.first(): T =
+    suspendCancellableCoroutine<T> { cont ->
+        handler { cont.resumeWith(Result.success(it)) }
+        exceptionHandler { cont.resumeWith(Result.failure(it)) }
+    }

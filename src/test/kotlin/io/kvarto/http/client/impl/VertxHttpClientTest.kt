@@ -72,18 +72,24 @@ internal class VertxHttpClientTest {
 
     @Test
     fun `GET success`() = testBlocking {
-        repeat(2) {
+        repeat(10) {
+            println("try #${it + 1}")
             val response = client.send(req.addParameter("name", "kvarto"))
             assertEquals(HttpStatus.OK, response.status)
             assertEquals("get kvarto", response.body.asString())
+            delay(1000)
+//            client.send(req.addParameter("name", "kvarto"))
         }
     }
 
     @Test
     fun `POST with body success`() = testBlocking {
-        val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body("kotlin")))
-        assertEquals(HttpStatus.ACCEPTED, response.status)
-        assertEquals("post kotlin", response.body.asString())
+        repeat(10) {
+            println("try #${it + 1}")
+            val response = client.send(req.withMethod(HttpMethod.POST).withPath("/foo").withBody(Body("kotlin")))
+            assertEquals(HttpStatus.ACCEPTED, response.status)
+            assertEquals("post kotlin", response.body.asString())
+        }
     }
 
     @Test
@@ -96,6 +102,7 @@ internal class VertxHttpClientTest {
     @Test
     fun `POST with stream body success`() = testBlocking {
         repeat(10) {
+            println("try #${it + 1}")
             val body = flow {
                 repeat(5) {
                     delay(10)
@@ -118,6 +125,7 @@ internal class VertxHttpClientTest {
 //        response.body.asFlow().collect {
 //            println(it)
 //        }
-        println(response.body.asString())
+//        println(response.body.asString())
+        assertEquals("KLMNO", response.body.asString())
     }
 }
