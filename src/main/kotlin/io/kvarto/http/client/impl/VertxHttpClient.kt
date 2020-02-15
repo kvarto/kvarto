@@ -9,8 +9,9 @@ import io.vertx.core.http.*
 import io.vertx.core.http.HttpMethod
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.kotlin.coroutines.dispatcher
-import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : HttpClient {
@@ -18,16 +19,28 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
 
     override suspend fun send(request: HttpRequest): HttpResponse = withContext(vertx.dispatcher()) {
         retry(request.metadata.retry) {
-            val vertxRequest = createVertxRequest(request)
-            val responseDeferred = async {
-                val vertxResponse = vertxRequest.first()
+            val options = RequestOptions().apply {
+                host = request.url.host
+                port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
+                isSsl = request.url.protocol == "https"
+                uri = buildUri(request.url, request.parameters).toASCIIString()
+                request.headers.entries().forEach { (name, value) ->
+                    addHeader(name, value)
+                }
+                correlationHeader()?.takeIf { it.first !in request.headers }?.let { addHeader(it.first, it.second) }
+            }
+            val method = HttpMethod.valueOf(request.method.name)
+            val ch = Channel<HttpResponse>()
+            val vertxRequest = client.request(method, options) { vertxResponse ->
                 val status = HttpStatus.fromCode(vertxResponse.statusCode())
                 val headers = StringMultiMap.of(vertxResponse.headers().map { (name, value) -> name to value })
                 val responseBodyFlow = vertxResponse.toFlow(vertx).map { it.bytes }
-                HttpResponse(status, headers, Body(responseBodyFlow))
+                val response = HttpResponse(status, headers, Body(responseBodyFlow))
+                launch { ch.send(response) }
             }
+            vertxRequest.setTimeout(request.metadata.timeout.toMillis())
             vertxRequest.sendRequest(request.body)
-            val response = responseDeferred.await()
+            val response = ch.receive()
             if (response.status !in request.metadata.successStatuses) {
                 throw UnexpectedHttpStatusException(response)
             }
@@ -53,26 +66,6 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
             }
         }
         end()
-    }
-
-    private suspend fun createVertxRequest(request: HttpRequest): HttpClientRequest {
-        val options = RequestOptions().apply {
-            host = request.url.host
-            port = request.url.port.takeIf { it != -1 } ?: request.url.defaultPort
-            isSsl = request.url.protocol == "https"
-            uri = buildUri(request.url, request.parameters).toASCIIString()
-            request.headers.entries().forEach { (name, value) ->
-                addHeader(name, value)
-            }
-            correlationHeader()?.takeIf { it.first !in request.headers }?.let { addHeader(it.first, it.second) }
-        }
-        val method = HttpMethod.valueOf(request.method.name)
-//        fun handler(response: HttpClientResponse) {
-//
-//        }
-        return client.request(method, options/*, ::handler*/).apply {
-            setTimeout(request.metadata.timeout.toMillis())
-        }
     }
 }
 
