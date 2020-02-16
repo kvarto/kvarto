@@ -34,11 +34,6 @@ internal class VertxHttpClientTest {
         it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
         it.put("/stream").handle { req ->
-            println("server received request $req")
-//            val body = req.body.asFlow().onEach {
-//                println("server received: $it")
-//                it[0] = (it[0] + 10).toByte()
-//            }
             val body = flow {
                 repeat(5) {
                     val value = (it + 75).toByte()
@@ -46,7 +41,7 @@ internal class VertxHttpClientTest {
                     delay(50)
                 }
             }
-            response("completed").withStatus(HttpStatus.ACCEPTED).copy(body = Body(body))
+            response("").withStatus(HttpStatus.ACCEPTED).copy(body = Body(body))
         }
     }
 
@@ -119,7 +114,6 @@ internal class VertxHttpClientTest {
         assertEquals("patch value1", response.body.asString())
     }
 
-    @Disabled
     @Test
     fun `POST with stream body success`() = testBlocking {
         repeat(10) {
