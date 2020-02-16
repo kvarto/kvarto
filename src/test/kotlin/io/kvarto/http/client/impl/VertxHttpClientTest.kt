@@ -13,6 +13,8 @@ import org.junit.jupiter.api.*
 import java.net.URL
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.time.ExperimentalTime
+import kotlin.time.measureTime
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class VertxHttpClientTest {
@@ -48,19 +50,20 @@ internal class VertxHttpClientTest {
     @Test
     fun `PUT with stream body success`() = testBlocking {
         val request = req.withMethod(HttpMethod.PUT).withPath("/stream").withBody(Body("ABC")).withTimeout(10.seconds)
-        println("Sending request")
         val response = client.send(request)
-        println("Client received response: $response")
         assertEquals(HttpStatus.ACCEPTED, response.status)
         val body = response.body.asFlow().toList().map { String(it) }
-        assertEquals("KLMNO".toList().map { it.toString() }, body)
+        assertEquals(listOf("K", "L", "M", "N", "O"), body)
     }
 
+    @ExperimentalTime
     @BeforeAll
     fun setup() = testBlocking() {
         println("starting")
-        vertx.startHttpServer(port, api)
-        println("server started")
+        val duration = measureTime {
+            vertx.startHttpServer(port, api)
+        }
+        println("server started $duration")
     }
 
     @Test
