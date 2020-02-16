@@ -135,6 +135,7 @@ private suspend fun HttpServerResponse.end(response: HttpResponse) {
         is FlowBody -> {
             isChunked = true
             response.body.value.map { Buffer.buffer(it) }.writeTo(this)
+            end()
         }
     }
 }

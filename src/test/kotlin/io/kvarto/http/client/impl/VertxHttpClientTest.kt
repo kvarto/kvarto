@@ -3,12 +3,12 @@ package io.kvarto.http.client.impl
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
 import io.kvarto.http.server.*
-import io.kvarto.utils.asString
-import io.kvarto.utils.seconds
+import io.kvarto.utils.*
 import io.vertx.core.Vertx
 import io.vertx.core.VertxException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import org.junit.jupiter.api.*
 import java.net.URL
 import kotlin.test.assertEquals
@@ -42,14 +42,23 @@ internal class VertxHttpClientTest {
             val body = flow {
                 repeat(5) {
                     val value = (it + 75).toByte()
-                    println("server emitting value $value")
                     emit(byteArrayOf(value))
                     delay(50)
                 }
             }
-            println("Sending response")
             response("completed").withStatus(HttpStatus.ACCEPTED).copy(body = Body(body))
         }
+    }
+
+    @Test
+    fun `PUT with stream body success`() = testBlocking {
+        val request = req.withMethod(HttpMethod.PUT).withPath("/stream").withBody(Body("ABC")).withTimeout(10.seconds)
+        println("Sending request")
+        val response = client.send(request)
+        println("Client received response: $response")
+        assertEquals(HttpStatus.ACCEPTED, response.status)
+        val body = response.body.asFlow().toList().map { String(it) }
+        assertEquals("KLMNO".toList().map { it.toString() }, body)
     }
 
     @BeforeAll
@@ -125,20 +134,5 @@ internal class VertxHttpClientTest {
             assertEquals(HttpStatus.ACCEPTED, response.status)
             assertEquals("post ABCDE", response.body.asString())
         }
-    }
-
-    @Disabled
-    @Test
-    fun `PUT with stream body success`() = testBlocking {
-        val request = req.withMethod(HttpMethod.PUT).withPath("/stream").withBody(Body("ABC")).withTimeout(10.seconds)
-        println("Sending request")
-        val response = client.send(request)
-        println("Client received response: $response")
-        assertEquals(HttpStatus.ACCEPTED, response.status)
-//        response.body.asFlow().collect {
-//            println(it)
-//        }
-//        println(response.body.asString())
-        assertEquals("KLMNO", response.body.asString())
     }
 }

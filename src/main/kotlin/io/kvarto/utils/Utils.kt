@@ -6,7 +6,6 @@ import io.vertx.core.*
 import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
-import io.vertx.kotlin.core.streams.endAwait
 import io.vertx.kotlin.coroutines.toChannel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -55,13 +54,10 @@ inline suspend fun <reified T> Body.parse(): T = DatabindCodec.mapper().readValu
 suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)
 
 internal suspend fun <T> Flow<T>.writeTo(stream: WriteStream<T>) {
-    runCatching {
-        collect { elem ->
-            stream.waitTillWritable()
-            stream.write(elem)
-        }
+    collect { elem ->
+        stream.waitTillWritable()
+        stream.write(elem)
     }
-    stream.endAwait()
 }
 
 internal suspend fun <T> WriteStream<T>.waitTillWritable() {
@@ -84,7 +80,7 @@ internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
     }
 }
 
-internal suspend fun <T> Flow<T>.toReadStream(): ReadStream<T> = ReadWriteStream<T>().also { writeTo(it) }
+//internal suspend fun <T> Flow<T>.toReadStream(): ReadStream<T> = ReadWriteStream<T>().also { writeTo(it) }
 
 
 val Int.millis: Duration get() = toLong().millis
