@@ -4,7 +4,6 @@ import io.kvarto.http.common.*
 import io.kvarto.utils.seconds
 import java.time.Duration
 
-// add circuit breaker
 data class RequestMetadata(
     val operationId: String? = null,
     val successStatuses: Set<HttpStatus> = SUCCESS_STATUSES,

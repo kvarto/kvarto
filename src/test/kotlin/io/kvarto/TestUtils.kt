@@ -1,4 +1,4 @@
-package io.kvarto.http.common
+package io.kvarto
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout

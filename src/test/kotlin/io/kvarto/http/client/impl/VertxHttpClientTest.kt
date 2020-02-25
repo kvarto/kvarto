@@ -1,5 +1,6 @@
 package io.kvarto.http.client.impl
 
+import io.kvarto.*
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
 import io.kvarto.http.server.*

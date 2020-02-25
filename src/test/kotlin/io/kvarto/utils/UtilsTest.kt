@@ -1,7 +1,7 @@
 package io.kvarto.utils
 
 import io.kvarto.http.common.Body
-import io.kvarto.http.common.testBlocking
+import io.kvarto.testBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
