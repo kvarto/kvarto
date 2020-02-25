@@ -3,8 +3,9 @@ package io.kvarto.http.client.impl
 import io.kvarto.*
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
-import io.kvarto.http.server.*
-import io.kvarto.utils.*
+import io.kvarto.http.server.httpApi
+import io.kvarto.http.server.response
+import io.kvarto.utils.seconds
 import io.vertx.core.Vertx
 import io.vertx.core.VertxException
 import kotlinx.coroutines.delay
@@ -36,7 +37,7 @@ internal class VertxHttpClientTest {
         it.get("/close").handler { it.response().close() }
         it.post("/foo").handle { req -> response("post ${req.body.asString()}").withStatus(HttpStatus.ACCEPTED) }
         it.patch("/").handle { req -> response("patch ${req.headers["header1"]}") }
-        it.put("/stream").handle { req ->
+        it.put("/stream").handle {
             val body = flow {
                 repeat(5) {
                     val value = (it + 75).toByte()
@@ -59,7 +60,7 @@ internal class VertxHttpClientTest {
 
     @ExperimentalTime
     @BeforeAll
-    fun setup() = testBlocking() {
+    fun setup() = testBlocking {
         println("starting")
         val duration = measureTime {
             vertx.startHttpServer(port, api)

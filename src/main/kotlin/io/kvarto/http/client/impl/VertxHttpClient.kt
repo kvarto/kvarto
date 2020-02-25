@@ -2,7 +2,7 @@ package io.kvarto.http.client.impl
 
 import io.kvarto.http.client.HttpClient
 import io.kvarto.http.common.*
-import io.kvarto.utils.*
+import io.kvarto.utils.buildUri
 import io.vertx.core.Vertx
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.*
@@ -83,7 +83,6 @@ internal class VertxHttpClient(val vertx: Vertx, options: HttpClientOptions) : H
         }
     }
 }
-
 
 val DEFAULT_OPTIONS = HttpClientOptions().apply {
     isTryUseCompression = true

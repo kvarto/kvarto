@@ -1,5 +1,6 @@
 package io.kvarto.http.common
 
+import com.fasterxml.jackson.module.kotlin.readValue
 import io.kvarto.http.server.HttpApi
 import io.opentracing.*
 import io.opentracing.propagation.Format
@@ -7,11 +8,17 @@ import io.opentracing.propagation.TextMapAdapter
 import io.vertx.core.Vertx
 import io.vertx.core.http.HttpServer
 import io.vertx.core.http.HttpServerOptions
+import io.vertx.core.json.jackson.DatabindCodec
 import io.vertx.core.streams.ReadStream
-import io.vertx.ext.web.*
-import io.vertx.ext.web.handler.BodyHandler
+import io.vertx.core.streams.WriteStream
+import io.vertx.ext.web.Router
+import io.vertx.ext.web.RoutingContext
 import io.vertx.kotlin.coroutines.awaitResult
+import io.vertx.kotlin.coroutines.toChannel
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.nio.MappedByteBuffer
+import java.nio.charset.Charset
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
@@ -24,21 +31,6 @@ suspend fun Vertx.startHttpServer(
     val router = Router.router(this)
     apis.forEach { it.setup(router) }
     awaitResult<HttpServer> { createHttpServer(options).requestHandler(router).listen(port, it) }
-}
-
-fun Router.postWithBody(path: String): Route {
-    post(path).handler(BodyHandler.create())
-    return post(path)
-}
-
-fun Router.putWithBody(path: String): Route {
-    put(path).handler(BodyHandler.create())
-    return put(path)
-}
-
-fun Router.patchWithBody(path: String): Route {
-    patch(path).handler(BodyHandler.create())
-    return patch(path)
 }
 
 fun RoutingContext.fail(status: HttpStatus) {
@@ -102,8 +94,55 @@ val DEFAULT_SERVER_OPTIONS = HttpServerOptions()
     .setDecompressionSupported(true)
 
 
-suspend fun <T> ReadStream<T>.first(): T =
-    suspendCancellableCoroutine<T> { cont ->
-        handler { cont.resumeWith(Result.success(it)) }
-        exceptionHandler { cont.resumeWith(Result.failure(it)) }
+internal suspend fun <T> Flow<T>.writeTo(stream: WriteStream<T>) {
+    collect { elem ->
+        stream.waitTillWritable()
+        stream.write(elem)
     }
+}
+
+internal suspend fun <T> WriteStream<T>.waitTillWritable() {
+    if (writeQueueFull()) {
+        suspendCancellableCoroutine<Unit> { cont ->
+            drainHandler { cont.resumeWith(Result.success(Unit)) }
+            exceptionHandler { cont.resumeWith(Result.failure(it)) }
+        }
+    }
+}
+
+//internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> = toChannel(vertx).consumeAsFlow()
+
+internal fun <T> ReadStream<T>.toFlow(vertx: Vertx): Flow<T> {
+    val ch = toChannel(vertx)
+    return flow {
+        for (elem in ch) {
+            emit(elem)
+        }
+    }
+}
+
+suspend fun Body.asBytes(): ByteArray =
+    when (this) {
+        is EmptyBody -> byteArrayOf()
+        is ByteArrayBody -> value
+        is JsonBody -> DatabindCodec.mapper().writeValueAsBytes(value)
+        is FlowBody -> {
+            val buf = MappedByteBuffer.allocate(4096)
+            value.collect {
+                buf.put(it)
+            }
+            buf.array().copyOf(buf.position())
+        }
+    }
+
+fun Body.asFlow(): Flow<ByteArray> =
+    when (this) {
+        is EmptyBody -> emptyFlow()
+        is ByteArrayBody -> flowOf(value)
+        is JsonBody -> flow { asBytes() }
+        is FlowBody -> value
+    }
+
+inline suspend fun <reified T> Body.parse(): T = DatabindCodec.mapper().readValue<T>(asBytes())
+
+suspend fun Body.asString(charset: Charset = Charsets.UTF_8): String = String(asBytes(), charset)

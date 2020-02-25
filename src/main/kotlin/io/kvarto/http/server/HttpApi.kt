@@ -2,8 +2,6 @@ package io.kvarto.http.server
 
 import io.kvarto.http.client.impl.toStringMultiMap
 import io.kvarto.http.common.*
-import io.kvarto.utils.toFlow
-import io.kvarto.utils.writeTo
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tag
 import io.opentracing.Tracer
@@ -155,6 +153,3 @@ fun httpApi(
 
 fun response(body: String): HttpResponse = HttpResponse(body = Body(body))
 
-fun HttpResponse.addHeader(name: String, value: String) = copy(headers = headers.add(name, value))
-
-fun HttpResponse.withStatus(status: HttpStatus) = copy(status = status)
