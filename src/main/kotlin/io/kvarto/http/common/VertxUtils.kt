@@ -13,7 +13,7 @@ import io.vertx.core.streams.ReadStream
 import io.vertx.core.streams.WriteStream
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import io.vertx.kotlin.coroutines.awaitResult
+import io.vertx.kotlin.core.http.listenAwait
 import io.vertx.kotlin.coroutines.toChannel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -30,7 +30,7 @@ suspend fun Vertx.startHttpServer(
 ) {
     val router = Router.router(this)
     apis.forEach { it.setup(router) }
-    awaitResult<HttpServer> { createHttpServer(options).requestHandler(router).listen(port, it) }
+    createHttpServer(options).requestHandler(router).listenAwait(port)
 }
 
 fun RoutingContext.fail(status: HttpStatus) {

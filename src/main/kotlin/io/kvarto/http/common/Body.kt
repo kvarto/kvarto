@@ -16,10 +16,18 @@ sealed class Body {
     }
 }
 
-internal data class FlowBody(val value: Flow<ByteArray>) : Body()
+internal data class FlowBody(val value: Flow<ByteArray>) : Body() {
+    override fun toString(): String = "FlowBody(...)"
+}
 
-internal data class ByteArrayBody(val value: ByteArray) : Body()
+internal data class ByteArrayBody(val value: ByteArray) : Body() {
+    override fun toString(): String = "ByteArrayBody([${value.size} bytes])"
+}
 
-internal class JsonBody(val value: Any) : Body()
+internal class JsonBody(val value: Any) : Body() {
+    override fun toString(): String = "JsonBody($value)"
+}
 
-internal object EmptyBody : Body()
+internal object EmptyBody : Body() {
+    override fun toString(): String = "EmptyBody()"
+}
